@@ -2,6 +2,7 @@
 
 #include "main.h"
 #include "global.h"
+#include <math.h>
 
 
 //globals
@@ -399,7 +400,7 @@ void print_wakeup_reason(){
 
 void setup() {
   pinMode(M_FWD, OUTPUT);
-  pinMode(M_BACK, OUTPUT)
+  pinMode(M_BACK, OUTPUT);
   pinMode(SW_EXIT,INPUT);
   pinMode(SW_FWD,INPUT);
   pinMode(SW_SELECT,INPUT);
