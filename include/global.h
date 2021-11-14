@@ -62,16 +62,21 @@ using namespace Menu;
 #define LDR_VAL 36
 #define V_BATT 39
 
+#define S_TO_uS 1000000
+#define LDR_SLEEP 600
 
+enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
+enum openungMode {LICHT, ZEIT, LICHT_ZEIT, NICHT};
 
-#endif
 
 typedef struct  {
     byte hour;
     byte minute;
     uint16_t lux;
     uint16_t delay; //delay till opening in seconds
-    byte mode; //0=licht, 1=Zeit, 2=Licht&Zeit
+    openingMode mode; //0=licht, 1=Zeit, 2=Licht&Zeit, 3=nichts
 } doorDayAlarm_t;
 
-enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
+
+
+#endif
