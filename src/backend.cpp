@@ -124,6 +124,7 @@ void setNextOpeningAlarm(byte m_DoW)
     if(m_DoW > 5){
       m_DoW = 0;
     }
+    
     else{
       m_DoW = m_DoW + 1;
     }
