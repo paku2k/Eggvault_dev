@@ -72,10 +72,10 @@ using namespace Menu;
 
 enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
 enum openingMode {LICHT, ZEIT, LICHT_ZEIT, NICHT};
-enum TimerLogic {NEXT_OPEN, NEXT_CLOSE, WAIT_CLOSE, NO_TIMER};
+enum TimerLogic {NEXT_OPEN, NEXT_CLOSE, NO_TIMER};
 enum TimerReturnVal {GO_DOWN, GO_UP, SLEEP_LONG, SLEEP_SHORT};
 
-
+enum OpenClose{OPEN, CLOSE};
 enum TimerVar {BLOCKED_TIMER, MOVING_TIMER};
 
 
