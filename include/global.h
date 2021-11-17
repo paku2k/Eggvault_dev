@@ -62,14 +62,25 @@ using namespace Menu;
 #define LDR_VAL 36
 #define V_BATT 39
 
+
 #define S_TO_uS 1000000
-#define LDR_SLEEP 600
+#define LDR_SLEEP 600 //Seconds Delay between Measurement
+#define LDR_MEAS_SLEEP 60 //Seconds Delay between Measurement, when threshold was broken
+#define BATT_CRIT 5.3 //Critical Volts for Battery
+#define BATT_MIN  5.0 //Minimum Volts for Battery
+#define THRESHOLD_COUNT_MAX 2 //How often has the LDR to be over threshold
 
 enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
-enum openungMode {LICHT, ZEIT, LICHT_ZEIT, NICHT};
+enum openingMode {LICHT, ZEIT, LICHT_ZEIT, NICHT};
+enum TimerLogic {NEXT_OPEN, NEXT_CLOSE, WAIT_CLOSE, NO_TIMER};
+enum TimerReturnVal {GO_DOWN, GO_UP, SLEEP_LONG, SLEEP_SHORT};
+
+
+enum TimerVar {BLOCKED_TIMER, MOVING_TIMER};
 
 
 typedef struct  {
+    bool done;
     byte hour;
     byte minute;
     uint16_t lux;

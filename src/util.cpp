@@ -1,10 +1,11 @@
 #include "util.h"
 
 void quickSort(doorDayAlarm_t arr[], int left, int right) {
+      //sorting of alarm array
       int i = left, j = right;
       doorDayAlarm_t tmp;
       int pivot = arr[(left + right) / 2].DoW*24*60+arr[(left + right) / 2].hour*60+arr[(left + right) / 2].minute;
- 
+      
       /* partition */
       while (i <= j) {
             while (arr[i].DoW*24*60+arr[i].hour*60+arr[i].minute < pivot)
