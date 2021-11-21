@@ -302,6 +302,7 @@ void print_wakeup_reason()
     case CLK_INT:
       //TODO: Alarm deaktivieren
 
+      
       switch(nextMode){
       case LICHT_ZEIT:
         if(nextMove = CLOSE){
@@ -546,17 +547,6 @@ result alert(menuOut &o, idleEvent e)
   return proceed;
 }
 
-result doAlert(eventMask e, prompt &item)
-{
-  nav.idleOn(alert);
-  return proceed;
-}
-
-result doResetAlert(eventMask e, prompt &item)
-{
-  nav.idleOn(alert);
-  return proceed;
-}
 
 result idleDeepSleepFunc(menuOut &o, idleEvent e)
 {
