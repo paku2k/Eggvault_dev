@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <LiquidCrystal.h>
 #include <ESP32AnalogRead.h>
+//#include <StateMachine.h>
 //#include "RTClib.h"
 #include <DS3231.h>
 #include <Wire.h>

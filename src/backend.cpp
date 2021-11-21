@@ -27,16 +27,16 @@ bool pmFlag;
 byte alarmDay, alarmHour, alarmMinute, alarmSecond, alarmBits;
 bool alarmDy, alarmH12Flag, alarmPmFlag;
 
-bool timeUpdate = true;
 
 byte lightFlag = 0; //bei nächstem aufwachen den Sensor nutzen
+byte errorFlag = 0; //Notalarm, wenn Klappe nicht durch Sensor geöffnet
 byte timeFlag = 0; //Alarm für LichtZeit Modus schon gekommen
 byte openNext = 0;  //als nächstes öffnen
 byte LDRTimer = NO_TIMER;
 uint16_t nextLux = 0;
 byte thresholdCount = 0;
 openingMode nextMode = NICHT;
-OpenClose nextMove = CLOSE;
+KLAPPENPOSITION nextMove = POS_DOWN;
 
 volatile int count; //timer variable
 hw_timer_t *timerBlocked = NULL;
@@ -83,8 +83,92 @@ void setNextOpeningAlarm(byte m_DoW)
   }
 }
 
-void setNextClosingAlarm(byte m_DoW)
+void activateNextAlarm()
 {
+  int i = 0;
+  byte m_DoW = DoW;
+  uint16_t now = Hour*60+Minute;
+  doorDayAlarm_t nextAlarm;
+
+  while(i<=6){
+    uint16_t nextClose = i*24*60+closingAlarms[m_DoW].hour*60+closingAlarms[m_DoW].minute;
+    uint16_t nextOpen = i*24*60+openingAlarms[m_DoW].hour*60+openingAlarms[m_DoW].minute;
+    
+    if( i*24*60+openingAlarms[m_DoW].hour*60+openingAlarms[m_DoW].minute >= now ){
+      if( (i*24*60+closingAlarms[m_DoW].hour*60+closingAlarms[m_DoW].minute >= now) ){
+        if()
+      }
+    }
+    i++;
+  }
+  switch(nextMode){
+      case LICHT_ZEIT:
+        if(nextMove = CLOSE){
+          if(timeFlag){
+            timeFlag = 0;
+            //TODO: Error handling, Zeit Flag schon gekommen
+            moveMotor(POS_DOWN);
+            setNextOpeningAlarm(DoW);
+          }
+          else
+          {
+            timeFlag = 0;
+            moveMotor(POS_DOWN);
+            setNextOpeningAlarm(DoW);
+          }
+        }
+        else
+        {
+          if(timeFlag){
+            //TODO: Error Handling, Alarm schon gekommen, Zeit flag nicht gesetzt
+            timeFlag = 1;
+            nextAction = SLEEP_LONG;
+          }
+          else
+          {
+            //Frühste Öffnungszeit erreicht
+            timeFlag = 1;
+            nextAction = SLEEP_LONG;
+          }
+        }
+        break;
+
+      case ZEIT:
+        timeFlag = 0;
+        switch(nextMove){
+          case OPEN:
+            moveMotor(POS_UP);
+            setNextClosingAlarm(DoW);
+            break;
+
+          case CLOSE:
+            moveMotor(POS_DOWN);
+            setNextOpeningAlarm(DoW);
+            break;
+
+          }
+        break;
+
+      case LICHT:
+        //TODO: Error handling, Alarm obwohl keine Aktion
+        break;
+
+      case NICHT:
+        switch(nextMove){
+          case OPEN:
+            setNextClosingAlarm(DoW);
+            break;
+
+          case CLOSE:
+            setNextOpeningAlarm(DoW);
+            break;
+
+          }
+        break;
+      }
+      break;
+
+
   //hhh
   switch (closingAlarms[m_DoW].mode)
   {
@@ -118,6 +202,17 @@ void setNextClosingAlarm(byte m_DoW)
     Clock.setA2Time(DoW, 0, 2, 0x0, true, false, false);
     break;
   }
+}
+
+void timeUpdate(){
+  Date = Clock.getDate();
+  Month = Clock.getMonth(century);
+  Year = Clock.getYear();
+  DoW = Clock.getDoW();
+
+  Hour = Clock.getHour(h12Flag, pmFlag);
+  Minute = Clock.getMinute();
+  Second = Clock.getSecond();
 }
 
 int16_t setAlarm(doorDayAlarm_t alarm)
@@ -280,14 +375,23 @@ TimerReturnVal checkLDR()
   }
 }
 
-void print_wakeup_reason()
+KLAPPENPOSITION getAndDisableAlarm(){
+  //TODO: Alarm deaktivieren
+
+  return OPEN;
+}
+
+void activateSensor(KLAPPENPOSITION nextAction){
+  //TODO: Sensor aktivieren
+}
+
+void eval_wakeup_reason()
 {
   esp_sleep_wakeup_cause_t wakeup_reason;
 
   wakeup_reason = esp_sleep_get_wakeup_cause();
 
-  switch (wakeup_reason)
-  {
+  switch (wakeup_reason){
   case ESP_SLEEP_WAKEUP_EXT0:
     Serial.println("Wakeup caused by external signal using RTC_IO");
     break;
@@ -300,75 +404,22 @@ void print_wakeup_reason()
     switch (GPIO_wake_up_reason())
     {
     case CLK_INT:
-      //TODO: Alarm deaktivieren
 
-      
-      switch(nextMode){
-      case LICHT_ZEIT:
-        if(nextMove = CLOSE){
-          if(timeFlag){
-            timeFlag = 0;
-            //TODO: Error handling, Zeit Flag schon gekommen
-            moveMotor(POS_DOWN);
-            setNextOpeningAlarm(DoW);
-          }
-          else
-          {
-            timeFlag = 0;
-            moveMotor(POS_DOWN);
-            setNextOpeningAlarm(DoW);
-          }
-        }
-        else
-        {
-          if(timeFlag){
-            //TODO: Error Handling, Alarm schon gekommen, Zeit flag nicht gesetzt
-            timeFlag = 1;
-            nextAction = SLEEP_LONG;
-          }
-          else
-          {
-            //Frühste Öffnungszeit erreicht
-            timeFlag = 1;
-            nextAction = SLEEP_LONG;
-          }
-        }
-        break;
+      nextAction = getAndDisableAlarm();
 
-      case ZEIT:
-        timeFlag = 0;
-        switch(nextMove){
-          case OPEN:
-            moveMotor(POS_UP);
-            setNextClosingAlarm(DoW);
-            break;
-
-          case CLOSE:
-            moveMotor(POS_DOWN);
-            setNextOpeningAlarm(DoW);
-            break;
-
-          }
-        break;
-
-      case LICHT:
-        //TODO: Error handling, Alarm obwohl keine Aktion
-        break;
-
-      case NICHT:
-        switch(nextMove){
-          case OPEN:
-            setNextClosingAlarm(DoW);
-            break;
-
-          case CLOSE:
-            setNextOpeningAlarm(DoW);
-            break;
-
-          }
-        break;
+      if(errorFlag){
+        //Klappe wurde nicht durch Sensor betätigt --> nächsten Alarm setzen
+        errorFlag = 0;
+        lightFlag = 0;
       }
-      break;
+      else if(lightFlag){
+        activateSensor(nextAction);
+        return;
+      }
+      else{
+        moveMotor(nextMove);
+      }
+      activateNextAlarm();
     
     case SW_FWD:
       //TODO: Implement Menu Timer, or Move Door UP
@@ -504,19 +555,13 @@ void setup()
   print_wakeup_reason();
 }
 
+
 void loop()
 {
 
   if (timeUpdate)
   {
-    Date = Clock.getDate();
-    Month = Clock.getMonth(century);
-    Year = Clock.getYear();
-    DoW = Clock.getDoW();
-
-    Hour = Clock.getHour(h12Flag, pmFlag);
-    Minute = Clock.getMinute();
-    Second = Clock.getSecond();
+    timeUpdate();
   }
   delay(50);
 
