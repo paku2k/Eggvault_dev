@@ -51,36 +51,133 @@ DS3231 Clock;
 LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 
 
-void setNextOpeningAlarm(byte m_DoW)
-{
+void setNextOpeningAlarm(byte m_DoW){
+nextMove = POS_UP;
+nextLux = openingAlarms[m_DoW].lux;
   switch (openingAlarms[m_DoW].mode)
   {
   case ZEIT:
-    Clock.setA1Time(DoW, openingAlarms[m_DoW].hour, openingAlarms[m_DoW].minute, 0, 0x0, true, false, false);
+    lightFlag = 0;
+    errorFlag = 0;
+    Clock.setA1Time(m_DoW, openingAlarms[m_DoW].hour, openingAlarms[m_DoW].minute, 0, 0x0, true, false, false);
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+
     break;
+
 
   case LICHT:
     lightFlag = 1;
-    Clock.setA1Time(DoW, 0, 1, 0, 0x0, true, false, false);
+    if(m_DoW == DoW){ //Heute?
+      //Kann eigentlich nicht sein, da Öffnungsalarm immer um 0:01 des Tages aktiv sein 
+      activateLDR(NEXT_OPEN, LICHT);
+    }
+    else{
+      //ein anderer Tag --> Alarm wird um 0:01 aktiv und macht den Lichtsensor an
+      lightFlag = 1;
+      errorFlag = 0;
+      Clock.setA1Time(m_DoW, openingAlarms[m_DoW].hour, openingAlarms[m_DoW].minute, 0, 0x0, true, false, false); //TODO: Öffnungsalarm immer mit 0:01 eintragen bei Licht
+      PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+    }
+    
     break;
+
 
   case LICHT_ZEIT:
     lightFlag = 1;
-    Clock.setA1Time(DoW, openingAlarms[m_DoW].hour, openingAlarms[m_DoW].minute, 0, 0x0, true, false, false);
+    errorFlag = 0;
+    Clock.setA1Time(m_DoW, openingAlarms[m_DoW].hour, openingAlarms[m_DoW].minute, 0, 0x0, true, false, false);
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+
+    break;
+
+
+  case NICHT:
+    break;
+  }
+}
+
+void setNextClosingAlarm(byte m_DoW){
+uint16_t now = DoW*24*60+Hour*60+Minute;
+uint16_t nextClose = m_DoW*24*60+closingAlarms[(m_DoW)].hour*60+closingAlarms[(m_DoW)].minute;
+
+nextMove = POS_UP;
+nextLux = closingAlarms[m_DoW].lux;
+
+  switch (closingAlarms[m_DoW].mode)
+  {
+  case ZEIT:
+    lightFlag = 0;
+    errorFlag = 0;
+    Clock.setA2Time(m_DoW, closingAlarms[m_DoW].hour, closingAlarms[m_DoW].minute, 0x0, true, false, false);
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+
+    break;
+
+  case LICHT_ZEIT:
+  case LICHT:
+    lightFlag = 1;
+    errorFlag = 0;
+    if(m_DoW == DoW){ //Heute?
+      //Klappe wurde grade geöffnet --> aufgewacht durch Öffnung der Klappe --> Sensor wird mit Verzögerung aktiviert
+
+      if(nextClose < now + 60){
+        //Späteste Schließung in den nächsten 59 min
+        if(closingAlarms[m_DoW].mode == LICHT_ZEIT){
+          Clock.setA2Time(m_DoW, closingAlarms[m_DoW].hour, closingAlarms[m_DoW].minute, 0x0, true, false, false);
+          activateLDR(NEXT_CLOSE, LICHT_ZEIT);
+        }
+        else{
+          activateLDR(NEXT_CLOSE, LICHT);
+        }
+      }
+      else{
+        //Späteste Schließung heute später als in 60min
+        if(Hour == 23){
+          if(DoW == 6){
+            Clock.setA2Time(0, 0, Minute, 0x0, true, false, false);
+          }
+          else{
+            Clock.setA2Time(DoW+1, 0, Minute, 0x0, true, false, false);
+          }
+        }
+        else{
+          Clock.setA2Time(DoW, Hour+1, Minute, 0x0, true, false, false);
+        }
+        
+        PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+      }
+    }
+    else{
+      //ein anderer Tag --> Alarm wird um 23:59 aktiv und schließt die Klappe spätestens
+      //TODO: Schließalarm immer bei 23:59 Uhr eintragen bei licht
+      lightFlag = 1;
+      errorFlag = 0;
+      if(closingAlarms[m_DoW].hour<12){
+        //Vor 12 Uhr
+        if(closingAlarms[m_DoW].hour<2){
+          //Vor 2 Uhr
+          Clock.setA2Time(m_DoW, 0, 2, 0x0, true, false, false);
+        }
+        //Zwischen 2 und 12 Uhr
+        Clock.setA2Time(m_DoW, closingAlarms[m_DoW].hour-2, closingAlarms[m_DoW].minute, 0x0, true, false, false); //Alarm auf 2 Stunden vor der Schließzeit setzen
+      }
+      else{
+        //nach 12 Uhr --> Alarm auf 12 Uhr setzen
+        Clock.setA2Time(m_DoW, 12, 0, 0x0, true, false, false); 
+      }
+      PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+    }
+    
     break;
 
   case NICHT:
-    if (m_DoW > 5)
-    {
-      m_DoW = 0;
-    }
-    else
-    {
-      m_DoW = m_DoW + 1;
-    }
-    Clock.setA1Time(DoW, 0, 1, 0, 0x0, true, false, false);
     break;
   }
+}
+
+void activateLDR(TimerLogic nextTimer, openingMode modus){
+//TODO: Implement activate Sensor
+
 }
 
 void activateNextAlarm()
@@ -90,84 +187,82 @@ void activateNextAlarm()
   uint16_t now = Hour*60+Minute;
   doorDayAlarm_t nextAlarm;
 
+  TimerLogic actAlarm = NO_TIMER;
+
   while(i<=6){
-    uint16_t nextClose = i*24*60+closingAlarms[m_DoW].hour*60+closingAlarms[m_DoW].minute;
-    uint16_t nextOpen = i*24*60+openingAlarms[m_DoW].hour*60+openingAlarms[m_DoW].minute;
+    uint16_t nextClose = i*24*60+closingAlarms[(m_DoW+i)%7].hour*60+closingAlarms[(m_DoW+i)%7].minute;
+    uint16_t nextOpen  = i*24*60+openingAlarms[(m_DoW+i)%7].hour*60+openingAlarms[(m_DoW+i)%7].minute;
     
-    if( i*24*60+openingAlarms[m_DoW].hour*60+openingAlarms[m_DoW].minute >= now ){
-      if( (i*24*60+closingAlarms[m_DoW].hour*60+closingAlarms[m_DoW].minute >= now) ){
-        if()
+
+    if(nextClose > now){
+      //Schließen kommt noch
+      if(nextOpen > now){
+        //Öffnen kommt auch noch
+        if(nextOpen > nextClose){
+          //Als nächstes Schließen!
+          if(closingAlarms[(m_DoW+i)%7].mode == NICHT){
+            actAlarm = NO_TIMER;
+          }
+          else{
+            actAlarm = NEXT_CLOSE;
+          }
+        }
+        else{
+          //Als nächstes Öffnen!
+          if(openingAlarms[(m_DoW+i)%7].mode == NICHT){
+            actAlarm = NO_TIMER;
+          }
+          else{
+            actAlarm = NEXT_OPEN;
+          }
+        }
+      }
+      else{
+        //Als nächstes Schließen!
+        if(closingAlarms[(m_DoW+i)%7].mode == NICHT){
+            actAlarm = NO_TIMER;
+          }
+          else{
+            actAlarm = NEXT_CLOSE;
+          }
       }
     }
-    i++;
-  }
-  switch(nextMode){
-      case LICHT_ZEIT:
-        if(nextMove = CLOSE){
-          if(timeFlag){
-            timeFlag = 0;
-            //TODO: Error handling, Zeit Flag schon gekommen
-            moveMotor(POS_DOWN);
-            setNextOpeningAlarm(DoW);
+    else{
+      //Schließen war schon
+      if(nextOpen > now){
+        //Als nächstes Öffnen!
+        if(openingAlarms[(m_DoW+i)%7].mode == NICHT){
+            actAlarm = NO_TIMER;
           }
-          else
-          {
-            timeFlag = 0;
-            moveMotor(POS_DOWN);
-            setNextOpeningAlarm(DoW);
-          }
-        }
-        else
-        {
-          if(timeFlag){
-            //TODO: Error Handling, Alarm schon gekommen, Zeit flag nicht gesetzt
-            timeFlag = 1;
-            nextAction = SLEEP_LONG;
-          }
-          else
-          {
-            //Frühste Öffnungszeit erreicht
-            timeFlag = 1;
-            nextAction = SLEEP_LONG;
-          }
-        }
-        break;
-
-      case ZEIT:
-        timeFlag = 0;
-        switch(nextMove){
-          case OPEN:
-            moveMotor(POS_UP);
-            setNextClosingAlarm(DoW);
-            break;
-
-          case CLOSE:
-            moveMotor(POS_DOWN);
-            setNextOpeningAlarm(DoW);
-            break;
-
-          }
-        break;
-
-      case LICHT:
-        //TODO: Error handling, Alarm obwohl keine Aktion
-        break;
-
-      case NICHT:
-        switch(nextMove){
-          case OPEN:
-            setNextClosingAlarm(DoW);
-            break;
-
-          case CLOSE:
-            setNextOpeningAlarm(DoW);
-            break;
-
-          }
-        break;
+          else{
+            actAlarm = NEXT_OPEN;
       }
+      else{
+        //Beides war schon
+        actAlarm = NO_TIMER;
+      }
+    }
+    if(actAlarm==NO_TIMER){
+      i++;
+    }
+    
+    if(actAlarm==NEXT_OPEN){
+      setNextOpeningAlarm((m_DoW+i)%7);
       break;
+    }
 
+    if(actAlarm==NEXT_CLOSE){
+      setNextClosingAlarm((m_DoW+i)%7);
+      break;
+    }
+        
+  }
+
+  if(actAlarm == NO_TIMER){
+    //Kein Alarm mehr gesetzt
+  }
+
+  
 
   //hhh
   switch (closingAlarms[m_DoW].mode)
