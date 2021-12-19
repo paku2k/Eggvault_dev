@@ -67,6 +67,8 @@ using namespace Menu;
 #define S_TO_uS 1000000
 #define LDR_SLEEP 600 //Seconds Delay between Measurement
 #define LDR_MEAS_SLEEP 60 //Seconds Delay between Measurement, when threshold was broken
+#define CLOSE_LIGHT_BUFFER 60 //Minutes Delay before Closing by sensor takes place
+
 #define BATT_CRIT 5.3 //Critical Volts for Battery
 #define BATT_MIN  5.0 //Minimum Volts for Battery
 #define THRESHOLD_COUNT_MAX 2 //How often has the LDR to be over threshold
