@@ -6,7 +6,7 @@
 #include <ESP32AnalogRead.h>
 //#include <StateMachine.h>
 //#include "RTClib.h"
-#include <DS3231.h>
+#include <SparkFun_RV8803.h>
 #include <Wire.h>
 //#include "arduino-esp32\arduino-esp32-master\tools\sdk\include\driver\driver\rtc_io.h"
 
