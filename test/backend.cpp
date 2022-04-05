@@ -11,13 +11,13 @@ char *brString;
 doorDayAlarm_t openingAlarms[7];
 doorDayAlarm_t closingAlarms[7];
 
-byte Year;
-byte Month;
-byte Date;
-byte DoW;
-byte Hour;
-byte Minute;
-byte Second;
+uint16_t Year;
+uint8_t Month;
+uint8_t Date;
+uint8_t DoW;
+uint8_t Hour;
+uint8_t Minute;
+uint8_t Second;
 
 KLAPPENPOSITION doorPosition, doorGoal;
 
@@ -41,6 +41,12 @@ int t_delta_min = 600;   // Zeit in Sekunden die zwischen zwei betätigungen per
 int t_sens = 120; // Zeit in Sekunden, die zwischen zwei Sensorprüfungen vergeht
 openingMode nextMode = NICHT;
 KLAPPENPOSITION nextMove = POS_DOWN;
+
+time_t lastMove, now;
+
+//TODO: getValuesfrom EEprom: lastMove, openAlarm, closeAlarm
+
+
 
 volatile int count; //timer variable
 hw_timer_t *timerBlocked = NULL;
@@ -99,79 +105,117 @@ void statusabfrage(){
 
 void setNextClosingAlarm(){
   nextMove = POS_DOWN;
-  switch (closingAlarms[DoW].mode)
+  LDRFlag = POS_BLOCKED;
+  alarmFlag = POS_BLOCKED;
+  switch (closingAlarms[weekday(now)].mode)
   {
   case ZEIT:
-    LDRFlag = POS_BLOCKED;
-    alarmFlag = POS_DOWN;
-    if( (closingAlarms[DoW].hour*60 + closingAlarms[DoW].minute) > (Hour*60 + Minute) ) //Alarm noch nicht vergangen
+    if( (closingAlarms[weekday(now)].hour*60 + closingAlarms[weekday(now)].minute) > (hour(now)*60 + minute(now)) ) //Alarm noch nicht vergangen
     {
-      setAlarm(DoW, closingAlarms[DoW].hour, closingAlarms[DoW].minute);
+      alarmFlag = nextMove;
+      setAlarm(weekday(now), closingAlarms[weekday(now)].hour, closingAlarms[weekday(now)].minute);
     }
 
     else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
     {
-      if(DoW >= 6){
-        setAlarm(0, 0, 1);
-      }
-      else
-      {
-        setAlarm(DoW+1, 0, 1);
-      }
+      alarmFlag = POS_BLOCKED;
+      setAlarmTomorrow0();
     }
     
-    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
     
-
     break;
 
 
   case LICHT:
-    lightFlag = 1;
-    if(m_DoW == DoW){ //Heute?
-      //Kann eigentlich nicht sein, da Öffnungsalarm immer um 0:01 des Tages aktiv sein 
-      activateLDR(NEXT_OPEN, LICHT);
-    }
-    else{
-      //ein anderer Tag --> Alarm wird um 0:01 aktiv und macht den Lichtsensor an
-      lightFlag = 1;
-      errorFlag = 0;
-      Clock.setA1Time(m_DoW, openingAlarms[m_DoW].hour, openingAlarms[m_DoW].minute, 0, 0x0, true, false, false); //TODO: Öffnungsalarm immer mit 0:01 eintragen bei Licht
-      PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+    alarmFlag = POS_BLOCKED;
+    setAlarmTomorrow0();
+    
+    if(lastMove + t_delta_min > now) //Letzte Bewegung noch nicht lange genug her
+    {
+      LDRFlag = nextMove;
+      esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - now) );
+    } 
+    else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
+    {
+      LDRFlag = nextMove;
+      activateLDR();
     }
     
     break;
 
 
   case LICHT_ZEIT:
-    lightFlag = 1;
-    errorFlag = 0;
-    Clock.setA1Time(m_DoW, openingAlarms[m_DoW].hour, openingAlarms[m_DoW].minute, 0, 0x0, true, false, false);
-    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+
+    if( (closingAlarms[weekday(now)].hour*60 + closingAlarms[weekday(now)].minute) > (hour(now)*60 + minute(now)) ) //Alarm noch nicht vergangen
+    {
+      alarmFlag = nextMove;
+      setAlarm(weekday(now), closingAlarms[weekday(now)].hour, closingAlarms[weekday(now)].minute);
+      
+      if(lastMove + t_delta_min > now) //Letzte Bewegung noch nicht lange genug her
+      {
+        LDRFlag = nextMove;
+        esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - now) );
+      } 
+      else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
+      {
+        LDRFlag = nextMove;
+        activateLDR();
+      }
+
+    }
+
+    else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
+    {
+      alarmFlag = POS_BLOCKED;
+      setAlarmTomorrow0();
+    }
+
+      PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
+
+    
 
     break;
 
 
   case NICHT:
+    alarmFlag = POS_BLOCKED;
+    setAlarmTomorrow0();
     break;
   }
 }
 
-void activateLDR(TimerLogic nextTimer, openingMode modus){
-//TODO: Implement activate Sensor
+void activateLDR(){
+  //TODO: Implement activate Sensor
+  esp_sleep_enable_timer_wakeup(S_TO_uS * t_sens);
+}
 
+void setAlarmTomorrow0()
+{
+  if(weekday(now) >= 6){
+        setAlarm(0, 0, 1);
+      }
+      else
+      {
+        setAlarm(weekday(now)+1, 0, 1);
+      }
 }
 
 
-void timeUpdate(){
-  Date = Clock.getDate();
-  Month = Clock.getMonth(century);
-  Year = Clock.getYear();
-  DoW = Clock.getDoW();
 
-  Hour = Clock.getHour(h12Flag, pmFlag);
-  Minute = Clock.getMinute();
-  Second = Clock.getSecond();
+void timeUpdate(){
+  tmElements_t tmels;
+
+  tmels.Minute = rtc.getDate();
+  tmels.Month = rtc.getMonth();
+  tmels.Year = rtc.getYear();
+  tmels.Wday = rtc.getWeekday();
+
+  tmels.Hour = rtc.getHours();
+  tmels.Minute = rtc.getMinutes();
+  tmels.Second = rtc.getSeconds();
+
+  now = makeTime(tmels);
 }
 
 

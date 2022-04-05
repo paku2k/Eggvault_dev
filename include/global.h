@@ -7,6 +7,7 @@
 //#include <StateMachine.h>
 //#include "RTClib.h"
 #include <SparkFun_RV8803.h>
+#include <TimeLib.h>
 #include <Wire.h>
 //#include "arduino-esp32\arduino-esp32-master\tools\sdk\include\driver\driver\rtc_io.h"
 
@@ -80,6 +81,33 @@ enum TimerReturnVal {GO_DOWN, GO_UP, SLEEP_LONG, SLEEP_SHORT};
 
 enum OpenClose{OPEN, CLOSE};
 enum TimerVar {BLOCKED_TIMER, MOVING_TIMER};
+
+
+// typedef struct Time{
+//   uint8_t minute;
+//   uint8_t hour;
+//   uint8_t DoW;
+//   uint8_t seconds;
+//   uint8_t date;
+//   uint8_t month;
+//   uint16_t year;
+
+//   bool Time::after (const Time& time2) const {
+//     if(year > time2.year) return 
+    
+//     if (hour > time2.hour) return true;
+//     if (hour < time2.hour) return false;
+
+//     if (minute > time2.minute) return true;
+//     if (minute < time2.minute) return false;
+
+//     if (seconds > time2.seconds) return true;
+//     return false;
+//   }
+
+// } mtime_t;
+
+
 
 
 typedef struct  {
