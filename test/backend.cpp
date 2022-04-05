@@ -80,7 +80,7 @@ void statusabfrage(){
     
 
     case POS_DOWN:
-
+      setNextOpeningAlarm();
     break;
 
 
@@ -98,7 +98,9 @@ void statusabfrage(){
 
 
 
-
+void setNextOpeningAlarm(){
+  //TODO: Implement next opening logic
+}
 
 
 
@@ -114,12 +116,14 @@ void setNextClosingAlarm(){
     {
       alarmFlag = nextMove;
       setAlarm(weekday(now), closingAlarms[weekday(now)].hour, closingAlarms[weekday(now)].minute);
+      esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     }
 
     else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
     {
       alarmFlag = POS_BLOCKED;
       setAlarmTomorrow0();
+      esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     }
     
     PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
@@ -130,6 +134,7 @@ void setNextClosingAlarm(){
   case LICHT:
     alarmFlag = POS_BLOCKED;
     setAlarmTomorrow0();
+    esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     
     if(lastMove + t_delta_min > now) //Letzte Bewegung noch nicht lange genug her
     {
@@ -141,6 +146,9 @@ void setNextClosingAlarm(){
       LDRFlag = nextMove;
       activateLDR();
     }
+
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
+
     
     break;
 
@@ -169,6 +177,7 @@ void setNextClosingAlarm(){
     {
       alarmFlag = POS_BLOCKED;
       setAlarmTomorrow0();
+      esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     }
 
       PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep
@@ -222,7 +231,7 @@ void timeUpdate(){
 void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
 {
   digitalWrite(LED, HIGH);
-  while (door_position != pos)
+  while (doorPosition != pos)
   {
     pinMode(END_LOW, INPUT_PULLUP);
     pinMode(END_UP, INPUT_PULLUP);
@@ -231,7 +240,7 @@ void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
     byte low = digitalRead(END_LOW);
     if (up && !low)
     {
-      door_position = POS_DOWN;
+      doorPosition = POS_DOWN;
       digitalWrite(M_FWD, HIGH);
       digitalWrite(M_BACK, LOW);
       //Klappe ist unten oder
@@ -240,12 +249,12 @@ void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
     else if (up && low)
     { //Klappe hängt fest
 
-      door_position = POS_BLOCKED;
+      doorPosition = POS_BLOCKED;
       timerBlocked = timerBegin(BLOCKED_TIMER, 80, true); //TODO: Implement Blocked Timer
     }
     else if (!up && low)
     {
-      door_position = POS_UP;
+      doorPosition = POS_UP;
       digitalWrite(M_FWD, LOW);
       digitalWrite(M_BACK, HIGH);
       //Klappe ist oben
@@ -253,7 +262,7 @@ void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
     else if (!up && !low)
     { //Klappe fährt grade  oder
 
-      door_position = POS_DRIVING;
+      doorPosition = POS_DRIVING;
       timerMoving = timerBegin(MOVING_TIMER, 80, true); //TODO: Implement Moving Timer
     }
   }
@@ -284,7 +293,7 @@ float getVolt()
   float mv;
   adc_vbatt.attach(V_BATT);
   digitalWrite(LDR_EN, HIGH);
-  mv = (adc_vbatt.readVoltage() * (1.0 / 6.0)) - 0.3; //TODO: Volt umsetzung implementieren
+  mv = (adc_vbatt.readVoltage() * (1.0 / 6.0)) - 300.0; //TODO: Volt umsetzung implementieren
 
   return mv;
 }
@@ -540,18 +549,17 @@ void setup()
   pinMode(LCD_BL_EN, OUTPUT);
   pinMode(LED, OUTPUT);
 
-  Clock.enableOscillator(true, false, 0);
-  Clock.enable32kHz(false);
-  Clock.setClockMode(false);
+  Wire.setPins(I2C_SDA, I2C_SCL);
+  Wire.begin();
 
-  Date = Clock.getDate();
-  Month = Clock.getMonth(century);
-  Year = Clock.getYear();
-  DoW = Clock.getDoW();
+  if (rtc.begin() == false)
+  {
+    Serial.println("Device not found. Please check wiring. Freezing.");
 
-  Hour = Clock.getHour(h12Flag, pmFlag);
-  Minute = Clock.getMinute();
-  Second = Clock.getSecond();
+    //TODO: Error handling
+  }
+  
+  timeUpdate();
 
   delay(50);
 

@@ -64,6 +64,8 @@ using namespace Menu;
 #define LDR_VAL 36
 #define V_BATT 39
 
+#define WAKEUP_PIN_BITMASK 0xF08000000
+
 
 #define S_TO_uS 1000000
 #define LDR_SLEEP 600 //Seconds Delay between Measurement
