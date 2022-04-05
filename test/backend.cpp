@@ -286,7 +286,7 @@ void activateNextAlarm()
     break;
 
   case NICHT:
-    if (m_DoW > 5)
+    if (m_DoW >= 6)
     {
       m_DoW = 0;
     }

@@ -30,7 +30,7 @@ void setup(){
   LCD_ON
   lcd.begin(16,2);
   lcd.print("Hello World");
-  
+  Serial.println("Los");
   ldr.attach(LDR_VAL);
   vbatt.attach(V_BATT);
 
