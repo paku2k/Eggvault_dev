@@ -433,8 +433,8 @@ void setup() {
   delay(200);
 
   lcd.begin(16,2);
-  nav.timeOut = 2;
-  nav.idleTask=idleDeepSleepFunc;//point a function to be used when menu is suspended
+  //nav.timeOut = 2;
+  //nav.idleTask=idleDeepSleepFunc;//point a function to be used when menu is suspended
 
   mainMenu[4].enabled=disabledStatus;
   timeMenu[2].enabled=disabledStatus;

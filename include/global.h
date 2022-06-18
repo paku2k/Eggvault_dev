@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <LiquidCrystal.h>
 #include <ESP32AnalogRead.h>
+#include <DS3231.h>
 //#include <StateMachine.h>
 //#include "RTClib.h"
 #include <SparkFun_RV8803.h>
@@ -76,6 +77,10 @@ using namespace Menu;
 #define BATT_MIN  5.0 //Minimum Volts for Battery
 #define THRESHOLD_COUNT_MAX 2 //How often has the LDR to be over threshold
 
+#define MINLUX 0
+#define MAXLUX 9
+
+
 enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
 enum openingMode {LICHT, ZEIT, LICHT_ZEIT, NICHT};
 enum TimerLogic {NEXT_OPEN, NEXT_CLOSE, NO_TIMER};
@@ -84,6 +89,29 @@ enum TimerReturnVal {GO_DOWN, GO_UP, SLEEP_LONG, SLEEP_SHORT};
 enum OpenClose{OPEN, CLOSE};
 enum TimerVar {BLOCKED_TIMER, MOVING_TIMER};
 
+enum Language {DEUTSCH, ENGLISCH, FRANZ};
+enum BTNAction {SELECT, EXIT, LEFT, RIGHT,NOTHING};
+enum Setmode {SETMINUTE, SETHOUR, SETNOTHING, SETLUX, SETDAY, SETMONTH, SETYEAR, SETCONFIRM};
+enum Daymode {WEEK, WEEKEND, DAILY};
+enum Modeset {MODESET_OPENING, MODESET_CLOSING};
+enum Days {MON, TUE, WED, THU, FRI, SAT, SUN};
+
+#define MONDAY 0b01000000
+#define TUESDAY 0b00100000
+#define WEDNESDAY 0b00010000
+#define THURSDAY 0b00001000
+#define FRIDAY 0b00000100
+#define SATURDAY 0b00000010
+#define SUNDAY 0b00000001
+
+#define M_INV 0
+#define o_INV 1
+#define D_INV 2
+#define i_INV 3
+#define F_INV 4
+#define r_INV 5
+#define S_INV 6
+#define a_INV 7
 
 // typedef struct Time{
 //   uint8_t minute;
@@ -110,12 +138,104 @@ enum TimerVar {BLOCKED_TIMER, MOVING_TIMER};
 // } mtime_t;
 
 
+byte M_inv[] = {
+  B01110,
+  B00100,
+  B01010,
+  B01010,
+  B01110,
+  B01110,
+  B01110,
+  B11111
+};
+
+byte o_inv[] = {
+  B11111,
+  B11111,
+  B10001,
+  B01110,
+  B01110,
+  B01110,
+  B10001,
+  B11111
+};
+
+byte D_inv[] = {
+  B00011,
+  B01101,
+  B01110,
+  B01110,
+  B01110,
+  B01101,
+  B00011,
+  B11111
+};
+
+byte i_inv[] = {
+  B11011,
+  B11111,
+  B10011,
+  B11011,
+  B11011,
+  B11011,
+  B10001,
+  B11111
+};
+
+byte F_inv[] = {
+  B00000,
+  B01111,
+  B01111,
+  B00001,
+  B01111,
+  B01111,
+  B01111,
+  B11111
+};
+
+byte r_inv[] = {
+  B11111,
+  B11111,
+  B01001,
+  B00110,
+  B01111,
+  B01111,
+  B01111,
+  B11111
+};
+
+byte S_inv[] = {
+  B10000,
+  B01111,
+  B01111,
+  B10001,
+  B11110,
+  B11110,
+  B00001,
+  B11111
+};
+
+byte a_inv[] = {
+  B11111,
+  B11111,
+  B11111,
+  B10001,
+  B11110,
+  B10000,
+  B01110,
+  B10000
+};
 
 
-typedef struct  {
+
+
+
+
+
+typedef struct {
     bool done;
-    byte hour;
-    byte minute;
+    uint8_t hour;
+    uint8_t minute;
     uint16_t lux;
     uint16_t delay; //delay till opening in seconds
     openingMode mode; //0=licht, 1=Zeit, 2=Licht&Zeit, 3=nichts

@@ -1,6 +1,5 @@
 
 #include "backend.h"
-#include "main.h"
 #include "global.h"
 #include <math.h>
 
@@ -35,10 +34,16 @@ KLAPPENPOSITION LDRFlag = POS_DOWN; //bei nächstem aufwachen den Sensor nutzen
 KLAPPENPOSITION alarmFlag = POS_DOWN;  //Alarm kommt für Öffnen oder Schließen
 //byte LDRTimer = NO_TIMER;
 //uint16_t lux_open = 0;
+
+
 byte lux_debounce_number = 3; // wie oft muss die Lichtschwelle erreicht sein, bis die Klappe sich bewegt
 int lux_debounce_time = 20; // Zeit in sekunden zwischen zwei positiven Lichtprüfungen
 int t_delta_min = 600;   // Zeit in Sekunden die zwischen zwei betätigungen per Licht vergangen sein müssen
 int t_sens = 120; // Zeit in Sekunden, die zwischen zwei Sensorprüfungen vergeht
+
+int t_err_open = 60; // Maximale Zeit zum Öffnen
+int t_err_close = 60; // Maximale Zeit zum Schließen
+
 openingMode nextMode = NICHT;
 KLAPPENPOSITION nextMove = POS_DOWN;
 
@@ -136,7 +141,7 @@ void setNextClosingAlarm(){
     setAlarmTomorrow0();
     esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     
-    if(lastMove + t_delta_min > now) //Letzte Bewegung noch nicht lange genug her
+    if(lastMove + t_delta_min > now+1) //Letzte Bewegung noch nicht lange genug her
     {
       LDRFlag = nextMove;
       esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - now) );
@@ -160,7 +165,7 @@ void setNextClosingAlarm(){
       alarmFlag = nextMove;
       setAlarm(weekday(now), closingAlarms[weekday(now)].hour, closingAlarms[weekday(now)].minute);
       
-      if(lastMove + t_delta_min > now) //Letzte Bewegung noch nicht lange genug her
+      if(lastMove + t_delta_min > now+1) //Letzte Bewegung noch nicht lange genug her
       {
         LDRFlag = nextMove;
         esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - now) );
@@ -250,7 +255,7 @@ void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
     { //Klappe hängt fest
 
       doorPosition = POS_BLOCKED;
-      timerBlocked = timerBegin(BLOCKED_TIMER, 80, true); //TODO: Implement Blocked Timer
+      timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); //TODO: Implement Blocked Timer
     }
     else if (!up && low)
     {
@@ -263,7 +268,7 @@ void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
     { //Klappe fährt grade  oder
 
       doorPosition = POS_DRIVING;
-      timerMoving = timerBegin(MOVING_TIMER, 80, true); //TODO: Implement Moving Timer
+      timerMoving = timerBegin(MOVING_TIMER, t_err_open, true); //TODO: Implement Moving Timer
     }
   }
 }
@@ -303,233 +308,233 @@ void getValuesFromFlash()
   //TODO: Implement getValuesFromFlash
 }
 
-TimerReturnVal checkLDR()
-{
-  switch (LDRTimer)
-  {
-  case NEXT_CLOSE:
-    int lux = getLux();
-    if (lux < nextLux)
-    {
-      thresholdCount++;
-      if (thresholdCount >= THRESHOLD_COUNT_MAX)
-      {
-        thresholdCount = 0;
-        LDRTimer = NO_TIMER;
-        return GO_DOWN;
-      }
-      else
-      {
-        thresholdCount++;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
-        return SLEEP_SHORT;
-      }
-    }
-    else
-    {
-      if (thresholdCount <= 1)
-      {
-        thresholdCount = 0;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_SLEEP);
-        LDRTimer = NEXT_CLOSE;
-        return SLEEP_LONG;
-      }
-      else
-      {
-        thresholdCount--;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
-        return SLEEP_SHORT;
-      }
-    }
-    break;
+// TimerReturnVal checkLDR()
+// {
+//   switch (LDRTimer)
+//   {
+//   case NEXT_CLOSE:
+//     int lux = getLux();
+//     if (lux < nextLux)
+//     {
+//       thresholdCount++;
+//       if (thresholdCount >= THRESHOLD_COUNT_MAX)
+//       {
+//         thresholdCount = 0;
+//         LDRTimer = NO_TIMER;
+//         return GO_DOWN;
+//       }
+//       else
+//       {
+//         thresholdCount++;
+//         esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
+//         return SLEEP_SHORT;
+//       }
+//     }
+//     else
+//     {
+//       if (thresholdCount <= 1)
+//       {
+//         thresholdCount = 0;
+//         esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_SLEEP);
+//         LDRTimer = NEXT_CLOSE;
+//         return SLEEP_LONG;
+//       }
+//       else
+//       {
+//         thresholdCount--;
+//         esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
+//         return SLEEP_SHORT;
+//       }
+//     }
+//     break;
 
-  case NEXT_OPEN:
-    int lux = getLux();
-    if (lux > nextLux)
-    {
-      thresholdCount++;
-      if (thresholdCount >= THRESHOLD_COUNT_MAX)
-      {
-        thresholdCount = 0;
-        LDRTimer = NO_TIMER;
-        return GO_UP;
-      }
-      else
-      {
-        thresholdCount++;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
-        return SLEEP_SHORT;
-      }
-    }
-    else
-    {
-      if (thresholdCount <= 1)
-      {
-        thresholdCount = 0;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_SLEEP);
-        LDRTimer = NEXT_OPEN;
-        return SLEEP_LONG;
-      }
-      else
-      {
-        thresholdCount--;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
-        return SLEEP_SHORT;
-      }
-    }
-    break;
+//   case NEXT_OPEN:
+//     int lux = getLux();
+//     if (lux > nextLux)
+//     {
+//       thresholdCount++;
+//       if (thresholdCount >= THRESHOLD_COUNT_MAX)
+//       {
+//         thresholdCount = 0;
+//         LDRTimer = NO_TIMER;
+//         return GO_UP;
+//       }
+//       else
+//       {
+//         thresholdCount++;
+//         esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
+//         return SLEEP_SHORT;
+//       }
+//     }
+//     else
+//     {
+//       if (thresholdCount <= 1)
+//       {
+//         thresholdCount = 0;
+//         esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_SLEEP);
+//         LDRTimer = NEXT_OPEN;
+//         return SLEEP_LONG;
+//       }
+//       else
+//       {
+//         thresholdCount--;
+//         esp_sleep_enable_timer_wakeup(S_TO_uS * LDR_MEAS_SLEEP);
+//         return SLEEP_SHORT;
+//       }
+//     }
+//     break;
 
-  case NO_TIMER:
-    //TODO: No Timer Error Handling
-  }
-}
-
-
+//   case NO_TIMER:
+//     //TODO: No Timer Error Handling
+//   }
+// }
 
 
-KLAPPENPOSITION getAndDisableAlarm(){
-  //TODO: Alarm deaktivieren
 
-  return OPEN;
-}
 
-void activateSensor(KLAPPENPOSITION nextAction){
-  //TODO: Sensor aktivieren
-}
+// KLAPPENPOSITION getAndDisableAlarm(){
+//   //TODO: Alarm deaktivieren
 
-void eval_wakeup_reason()
-{
-  esp_sleep_wakeup_cause_t wakeup_reason;
+//   return POS_UP;
+// }
 
-  wakeup_reason = esp_sleep_get_wakeup_cause();
+// void activateSensor(KLAPPENPOSITION nextAction){
+//   //TODO: Sensor aktivieren
+// }
 
-  switch (wakeup_reason){
-  case ESP_SLEEP_WAKEUP_EXT0:
-    Serial.println("Wakeup caused by external signal using RTC_IO");
-    break;
-  case ESP_SLEEP_WAKEUP_EXT1:
-    Serial.println("Wakeup caused by external signal using RTC_CNTL");
-    getValuesFromFlash();
+// void eval_wakeup_reason()
+// {
+//   esp_sleep_wakeup_cause_t wakeup_reason;
 
-    TimerReturnVal nextAction = SLEEP_LONG;
+//   wakeup_reason = esp_sleep_get_wakeup_cause();
 
-    switch (GPIO_wake_up_reason())
-    {
-    case CLK_INT:
+//   switch (wakeup_reason){
+//   case ESP_SLEEP_WAKEUP_EXT0:
+//     Serial.println("Wakeup caused by external signal using RTC_IO");
+//     break;
+//   case ESP_SLEEP_WAKEUP_EXT1:
+//     Serial.println("Wakeup caused by external signal using RTC_CNTL");
+//     getValuesFromFlash();
 
-      nextAction = getAndDisableAlarm();
+//     TimerReturnVal nextAction = SLEEP_LONG;
 
-      if(errorFlag){
-        //Klappe wurde nicht durch Sensor betätigt --> nächsten Alarm setzen
-        errorFlag = 0;
-        lightFlag = 0;
-      }
-      else if(lightFlag){
-        activateSensor(nextAction);
-        return;
-      }
-      else{
-        moveMotor(nextMove);
-      }
-      activateNextAlarm();
+//     switch (GPIO_wake_up_reason())
+//     {
+//     case CLK_INT:
+
+//       nextAction = getAndDisableAlarm();
+
+//       if(errorFlag){
+//         //Klappe wurde nicht durch Sensor betätigt --> nächsten Alarm setzen
+//         errorFlag = 0;
+//         lightFlag = 0;
+//       }
+//       else if(lightFlag){
+//         activateSensor(nextAction);
+//         return;
+//       }
+//       else{
+//         moveMotor(nextMove);
+//       }
+//       activateNextAlarm();
     
-    case SW_FWD:
-      //TODO: Implement Menu Timer, or Move Door UP
-      break;
+//     case SW_FWD:
+//       //TODO: Implement Menu Timer, or Move Door UP
+//       break;
 
-    case SW_BACK:
-      //TODO: Implement Menu Timer, or Move Door DOWN
-      break;
+//     case SW_BACK:
+//       //TODO: Implement Menu Timer, or Move Door DOWN
+//       break;
     
-    default:
-      LCD_ON
-      break;
-    }
+//     default:
+//       LCD_ON
+//       break;
+//     }
 
-    break;
-  case ESP_SLEEP_WAKEUP_TIMER:
-    Serial.println("Wakeup caused by timer");
-    getValuesFromFlash();
+//     break;
+//   case ESP_SLEEP_WAKEUP_TIMER:
+//     Serial.println("Wakeup caused by timer");
+//     getValuesFromFlash();
     
     
 
-    TimerReturnVal nextAction = SLEEP_LONG;
+//     TimerReturnVal nextAction = SLEEP_LONG;
 
-    switch(nextMode){
-      case LICHT_ZEIT:
-        if(nextMove = CLOSE){
-          if(timeFlag){
-            timeFlag = 0;
-            //TODO: Error handling, Timer kommt nach Zeit Flag
-            moveMotor(POS_DOWN);
-            setNextOpeningAlarm(DoW);
-          }
-          else
-          {
-            nextAction = checkLDR();
-          }
-        }
-        else
-        {
-          if(timeFlag){
-            nextAction = checkLDR();
-          }
-          else
-          {
-            //TODO: Error Handling, alarm ncoh nicht gekommen, trotzdem Timer
-          }
-        }
-        break;
+//     switch(nextMode){
+//       case LICHT_ZEIT:
+//         if(nextMove = CLOSE){
+//           if(timeFlag){
+//             timeFlag = 0;
+//             //TODO: Error handling, Timer kommt nach Zeit Flag
+//             moveMotor(POS_DOWN);
+//             setNextOpeningAlarm(DoW);
+//           }
+//           else
+//           {
+//             nextAction = checkLDR();
+//           }
+//         }
+//         else
+//         {
+//           if(timeFlag){
+//             nextAction = checkLDR();
+//           }
+//           else
+//           {
+//             //TODO: Error Handling, alarm ncoh nicht gekommen, trotzdem Timer
+//           }
+//         }
+//         break;
 
-      case ZEIT:
-        //TODO: Error handling, Timer kommt obwohl Zeit Modus
-        break;
+//       case ZEIT:
+//         //TODO: Error handling, Timer kommt obwohl Zeit Modus
+//         break;
 
-      case LICHT:
-        nextAction = checkLDR();
-        break;
+//       case LICHT:
+//         nextAction = checkLDR();
+//         break;
 
-      case NICHT:
-        //TODO: Error handling, Timer obwohl keine Aktion
-        break;
+//       case NICHT:
+//         //TODO: Error handling, Timer obwohl keine Aktion
+//         break;
 
-    }
-    switch(nextAction){
-      case GO_UP:
-        moveMotor(POS_UP);
-        thresholdCount = 0;
-        timeFlag = 0;
-        setNextClosingAlarm(DoW);
-        break;
+//     }
+//     switch(nextAction){
+//       case GO_UP:
+//         moveMotor(POS_UP);
+//         thresholdCount = 0;
+//         timeFlag = 0;
+//         setNextClosingAlarm(DoW);
+//         break;
 
-      case GO_DOWN:
-        moveMotor(POS_DOWN);
-        thresholdCount = 0;
-        timeFlag = 0;
-        setNextOpeningAlarm(DoW);
-        break;
+//       case GO_DOWN:
+//         moveMotor(POS_DOWN);
+//         thresholdCount = 0;
+//         timeFlag = 0;
+//         setNextOpeningAlarm(DoW);
+//         break;
 
-      case SLEEP_LONG:
-        esp_deep_sleep_start();
-        break;
+//       case SLEEP_LONG:
+//         esp_deep_sleep_start();
+//         break;
 
-      case SLEEP_SHORT:
-        esp_deep_sleep_start();
-        break;
-    }
-    break;
+//       case SLEEP_SHORT:
+//         esp_deep_sleep_start();
+//         break;
+//     }
+//     break;
 
-  case ESP_SLEEP_WAKEUP_TOUCHPAD:
-    Serial.println("Wakeup caused by touchpad");
-    break;
-  case ESP_SLEEP_WAKEUP_ULP:
-    Serial.println("Wakeup caused by ULP program");
-    break;
-  default:
-    Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
-    break;
-  }
-}
+//   case ESP_SLEEP_WAKEUP_TOUCHPAD:
+//     Serial.println("Wakeup caused by touchpad");
+//     break;
+//   case ESP_SLEEP_WAKEUP_ULP:
+//     Serial.println("Wakeup caused by ULP program");
+//     break;
+//   default:
+//     Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
+//     break;
+//   }
+// }
 
 void setup()
 {
@@ -560,10 +565,9 @@ void setup()
   }
   
   timeUpdate();
-
   delay(50);
 
-  print_wakeup_reason();
+  //print_wakeup_reason();
 }
 
 
@@ -576,7 +580,7 @@ void loop()
   }
   delay(50);
 
-  print_wakeup_reason();
+  // print_wakeup_reason();
 
   delay(100); //simulate a delay as if other tasks are running
 }
