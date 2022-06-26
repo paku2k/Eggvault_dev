@@ -13,6 +13,8 @@ KLAPPENPOSITION doorPosition, doorGoal;
 const char* key_n = "motor_act";
 const char* key_s = "motor_tim";
 
+uint32_t time_up = 120;
+
 uint32_t actuations, seconds;
 
 long m_timer = 0;
@@ -22,9 +24,22 @@ void moveMotor(KLAPPENPOSITION pos)
 {
   digitalWrite(LED, HIGH);
   
+  
   do
  
   {
+    if((millis()-m_timer)/1000 > time_up){
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" SAFETY TIMER!");
+        digitalWrite(M_FWD, LOW);
+        digitalWrite(M_BACK, LOW);
+        while(!digitalRead(SW_BACK) || !digitalRead(SW_FWD)){
+          
+        }
+        m_timer = millis();
+        lcd.clear();
+  }
     
     pinMode(END_LOW, INPUT_PULLUP);
     pinMode(END_UP, INPUT_PULLUP);
@@ -35,7 +50,8 @@ void moveMotor(KLAPPENPOSITION pos)
     {
       doorPosition = POS_DRIVING;
       Serial.println("pos driving");
-            //Klappe ist unten oder
+      
+      //Klappe ist unten oder
       //Klappe ist zu leicht
     }
     else if (up && low)
@@ -59,7 +75,18 @@ void moveMotor(KLAPPENPOSITION pos)
     else if (!up && low)
     {
       doorPosition = POS_BLOCKED;
-            Serial.println("pos blocked");
+      Serial.println("pos blocked");
+      
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print(" STUCK AT TOP!");
+      digitalWrite(M_FWD, LOW);
+      digitalWrite(M_BACK, LOW);
+      while(!digitalRead(SW_BACK) || !digitalRead(SW_FWD)){
+        
+      }
+      lcd.clear();
+      m_timer = millis();
 
     }
     else if (!up && !low)
@@ -128,6 +155,21 @@ void setup(){
 }
 
 void loop(){
+  //LDR und spannungsmesser aktivieren
+  digitalWrite(LDR_EN, HIGH);
+  m_timer = millis();
+  lcd.setCursor(0,0);
+  lcd.print("N: ");
+  lcd.print(actuations);
+  lcd.setCursor(0, 1);
+  lcd.print("T: ");
+  lcd.print(seconds);
+  lcd.setCursor(11, 1);
+  lcd.print((vbatt.readVoltage() * (6.0 / 1.0)) + 0.3, 2);
+  lcd.setCursor(15,1 );
+  lcd.print("V");
+  Serial.println(vbatt.readVoltage());
+
   if(digitalRead(SW_BACK) && digitalRead(SW_FWD)){
     seconds = 0;
     actuations = 0;
@@ -143,15 +185,10 @@ void loop(){
   }
   moveMotor(doorGoal);
   delay(1500);
-  lcd.setCursor(0,0);
-  lcd.print("N: ");
-  lcd.print(actuations);
-  lcd.setCursor(0, 1);
-  lcd.print("T: ");
-  lcd.print(seconds);
+  
 
   seconds = seconds + (millis()-m_timer)/1000;
-  m_timer = millis();
+  
   actuations = actuations+1;
   memory.putUInt(key_n, actuations);
   memory.putUInt(key_s, seconds);
