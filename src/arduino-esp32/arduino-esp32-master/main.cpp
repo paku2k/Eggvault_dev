@@ -9,6 +9,8 @@ char *brString;
 
 doorDayAlarm_t openingAlarms[7];
 doorDayAlarm_t closingAlarms[7];
+const char* keyOpenAlarms = "open_alarm";
+const char* keyCloseAlarms = "close_alarm";
 
 // uint8_t luxMap[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 uint32_t voltMap[10] = {300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000};
@@ -77,6 +79,7 @@ ESP32AnalogRead adc_ldr;
 ESP32AnalogRead adc_vbatt;
 RV8803 rtc;
 LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
+Preferences memory;
 
 
 
@@ -200,17 +203,17 @@ void timeUpdate(){
 void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 {
   lcd.clear();
-  Serial.print("Days Open: ");
-  Serial.println(days_o);
-  Serial.print("Days Close: ");
-  Serial.println(days_c);
+  // // Serial.print("Days Open: ");
+  // // Serial.println(days_o);
+  // // Serial.print("Days Close: ");
+  // // Serial.println(days_c);
   
 // ================================================
 // ================ Hauptmenü: ====================
 // ================================================
 
   if (menu_id == 000){
-  Serial.println("Hauptmenü");
+  // // Serial.println("Hauptmenü");
 
     struct tm *tmp = gmtime(&t_now);
 
@@ -277,7 +280,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 // ================================================
 
   if (menu_id == 100){
-  Serial.println("Öffnungsmodus");
+  // Serial.println("Öffnungsmodus");
 
     struct tm *tmp = gmtime(&t_now);
 
@@ -343,11 +346,11 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
     {
       if(modeset == MODESET_CLOSING){
         days = &days_c;
-        Serial.println("Schließmodus set");
+        // Serial.println("Schließmodus set");
       }
       else{        
         days = &days_o;
-        Serial.println("Öffnungsmodus set");
+        // Serial.println("Öffnungsmodus set");
       }
 
 
@@ -440,10 +443,10 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
     else if(menu_id == 110) 
     {
       if(modeset == MODESET_CLOSING){
-        Serial.println("Schließtage set");
+        // Serial.println("Schließtage set");
       }
       else{        
-        Serial.println("Öffnungstage set");
+        // Serial.println("Öffnungstage set");
       }
 
 
@@ -597,7 +600,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 // ================================================
 
   else if (menu_id == 200){
-  Serial.println("Schließmodus");
+  // Serial.println("Schließmodus");
 
     struct tm *tmp = gmtime(&t_now);
 
@@ -664,7 +667,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 // ================================================
 
   else if (menu_id == 998){
-  Serial.println("Uhrzeit");
+  // Serial.println("Uhrzeit");
 
     struct tm *tmp = gmtime(&t_now);
 
@@ -719,7 +722,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
   }
 
    else if (menu_id == 300){
-      Serial.println("Uhrzeit set");
+      // Serial.println("Uhrzeit set");
 
         if(timeSetMode == SETNOTHING){
           struct tm *tmp = gmtime(&t_now);
@@ -850,7 +853,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 // ================= Datum: =======================
 // ================================================
     else if (menu_id == 400){
-      Serial.println("Datum set");
+      // Serial.println("Datum set");
 
         if(timeSetMode == SETNOTHING){
           struct tm *tmp = gmtime(&t_now);
@@ -1025,7 +1028,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 // ================================================
 
   else if (menu_id == 500){
-  Serial.println("Erweitert");
+  // Serial.println("Erweitert");
   //TODO: Erweiterte einstellungen implementieren
 
     struct tm *tmp = gmtime(&t_now);
@@ -1077,7 +1080,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 // ================= Sprache: =====================
 // ================================================
   else if (menu_id == 600){
-  Serial.println("Sprache");
+  // Serial.println("Sprache");
   //TODO: Sprache implementieren
 
     struct tm *tmp = gmtime(&t_now);
@@ -1126,7 +1129,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 // =================== Reset: =====================
 // ================================================
   else if (menu_id == 700){
-  Serial.println("Reset");
+  // Serial.println("Reset");
   //TODO: Reset implementieren
 
     struct tm *tmp = gmtime(&t_now);
@@ -1176,11 +1179,11 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
   else if (menu_id == 800){
       if(modeset == MODESET_CLOSING){
         mode = &mode_c;
-        Serial.println("Schließmodus set");
+        // Serial.println("Schließmodus set");
       }
       else{        
         mode = &mode_o;
-        Serial.println("Öffnungsmodus set");
+        // Serial.println("Öffnungsmodus set");
       }
 
 
@@ -1275,12 +1278,12 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
       if(modeset == MODESET_CLOSING){
         lux = &lux_c;
         mode = & mode_c;
-        Serial.println("Lichtschließ set");
+        // Serial.println("Lichtschließ set");
       }
       else{        
         lux = &lux_o;
         mode = & mode_o;
-        Serial.println("Lichtschließ set");
+        // Serial.println("Lichtschließ set");
       }
 
 
@@ -1362,13 +1365,13 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
         hour_set = &hour_c;
         minute_set  = &minute_c;
         mode = & mode_c;
-        Serial.println("Zeitschließ set");
+        // Serial.println("Zeitschließ set");
       }
       else{        
         hour_set = &hour_o;
         minute_set  = &minute_o;
         mode = & mode_o;
-        Serial.println("Zeitöffnung set");
+        // Serial.println("Zeitöffnung set");
       }
 
 
@@ -1540,28 +1543,28 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 void menuUpdate(){
   if(digitalRead(SW_SELECT) == HIGH && button_flag == 0)
   {
-    Serial.println("Select pressed");
+    // Serial.println("Select pressed");
     menuFunctions(SELECT);
     button_flag = 1;
     previousMillis = millis();
   }
   if(digitalRead(SW_EXIT) == HIGH && button_flag == 0)
   {
-      Serial.println("Exit pressed");
+      // Serial.println("Exit pressed");
     menuFunctions(EXIT);
     button_flag = 1;
     previousMillis = millis();
   }
   if(digitalRead(SW_BACK) == HIGH && button_flag == 0)
   {
-      Serial.println("Left pressed");
+      // Serial.println("Left pressed");
     menuFunctions(LEFT);
     button_flag = 1;
     previousMillis = millis();
   }
   else if(digitalRead(SW_FWD) == HIGH && button_flag == 0)
   {
-      Serial.println("Right pressed");
+      // Serial.println("Right pressed");
     menuFunctions(RIGHT);
     button_flag = 1;
     previousMillis = millis();
@@ -1599,6 +1602,40 @@ void menuUpdate(){
 // ================================================================================================
 
 
+uint8_t VoltToLux(uint32_t mV){
+  uint32_t m_mV = mV;
+  int i;
+  for (i = 0; i<9; i++){
+    if (mV > voltMap[i]){
+      if(mV < voltMap[i+1]){
+        break;
+      }
+    }
+  }
+  return i; // Lux Schwelle
+}
+
+
+uint8_t getLux()
+{
+  uint8_t lux;
+  adc_ldr.attach(LDR_VAL);
+  digitalWrite(LDR_EN, HIGH);
+  lux = VoltToLux(adc_ldr.readMiliVolts()); //TODO: LDR lux umsetzung implementieren
+  digitalWrite(LDR_EN, LOW); //TODO: Prüfen ob das reicht
+  return lux;
+}
+
+float getVolt()
+{
+
+  float mv;
+  adc_vbatt.attach(V_BATT);
+  digitalWrite(LDR_EN, HIGH);
+  mv = (adc_vbatt.readVoltage() * (1.0 / 6.0)) - 300.0; //TODO: Volt umsetzung implementieren
+
+  return mv;
+}
 
 void activateLDR(){
   uint8_t ramCounter = rtc.readRegister(RV8803_RAM);
@@ -1688,50 +1725,16 @@ void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
 uint64_t GPIO_wake_up_reason()
 {
   uint64_t GPIO_reason = esp_sleep_get_ext1_wakeup_status();
-  //Serial.print("GPIO that triggered the wake up: GPIO ");
+  //// Serial.print("GPIO that triggered the wake up: GPIO ");
   GPIO_reason = (log(GPIO_reason)) / log(2);
   return GPIO_reason;
-  //Serial.println(GPIO_reason);
+  //// Serial.println(GPIO_reason);
 }
 
-uint8_t VoltToLux(uint32_t mV){
-  uint32_t m_mV = mV;
-  int i;
-  for (i = 0; i<9; i++){
-    if (mV > voltMap[i]){
-      if(mV < voltMap[i+1]){
-        break;
-      }
-    }
-  }
-  return i; // Lux Schwelle
-}
 
-uint8_t getLux()
-{
-  uint8_t lux;
-  adc_ldr.attach(LDR_VAL);
-  digitalWrite(LDR_EN, HIGH);
-  lux = VoltToLux(adc_ldr.readMiliVolts()); //TODO: LDR lux umsetzung implementieren
-  digitalWrite(LDR_EN, LOW); //TODO: Prüfen ob das reicht
-  return lux;
-}
 
-float getVolt()
-{
 
-  float mv;
-  adc_vbatt.attach(V_BATT);
-  digitalWrite(LDR_EN, HIGH);
-  mv = (adc_vbatt.readVoltage() * (1.0 / 6.0)) - 300.0; //TODO: Volt umsetzung implementieren
 
-  return mv;
-}
-
-void getValuesFromFlash()
-{
-  //TODO: Implement getValuesFromFlash
-}
 
 
 
@@ -1894,19 +1897,98 @@ void saveAlarmValues(){
         openingAlarms[i].minute = minute_o;
         openingAlarms[i].mode = (openingMode)mode_o;
         openingAlarms[i].lux = lux_o;
+      
+        Serial.println("Saving open alarms");
       }
+
       else{
         closingAlarms[i].delay = 0;
         closingAlarms[i].hour = hour_c;
         closingAlarms[i].minute = minute_c;
         closingAlarms[i].mode = (openingMode)mode_c;
         closingAlarms[i].lux = lux_c;
+
+        Serial.println("Saving close alarms");
       }
     }
   }
 
+  memory.putBytes(keyOpenAlarms, openingAlarms, sizeof(doorDayAlarm_t[7]));
+  memory.putBytes(keyCloseAlarms, closingAlarms, sizeof(doorDayAlarm_t[7]));
+  Serial.println("SAVED");
+  memory.putInt("init", 1);
 
 }
+
+void setAlarmsDefault(){
+  doorDayAlarm_t buf_o;
+  doorDayAlarm_t buf_c;
+
+  buf_o.delay = 0;
+  buf_o.done = 0;
+  buf_o.hour = 12;
+  buf_o.minute = 30;
+  buf_o.mode = NICHT;
+
+
+  buf_c.delay = 0;
+  buf_c.done = 0;
+  buf_c.hour = 20;
+  buf_c.minute = 30;
+  buf_c.mode = NICHT;
+
+
+  int i;
+  for(i = 0; i< 7; i++){
+    openingAlarms[i] = buf_o;
+    closingAlarms[i] = buf_c;
+  }
+
+}
+
+
+int readValuesFromFlash(){
+  // char buf_o[sizeof(doorDayAlarm_t[7])];
+
+  int init = memory.getInt("init", 0);
+  if(init == 0){
+    // set Alarms to default
+    setAlarmsDefault();
+    Serial.println("No values to read --> default");
+  }
+  else{
+    // char buffer[sizeof(doorDayAlarm_t[7])];
+    memory.getBytes(keyOpenAlarms, openingAlarms, 7*sizeof(doorDayAlarm_t));
+    memory.getBytes(keyCloseAlarms, closingAlarms, 7*sizeof(doorDayAlarm_t));
+
+    int i;
+    Serial.println("Alarms read --> printing opening Alarms");
+    for(i = 0; i < 7; i++){
+      Serial.print("Minute on day");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(openingAlarms[i].minute);
+      Serial.print("Mode on day");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(openingAlarms[i].mode);
+    }
+
+    Serial.println("Alarms read --> printing closing Alarms");
+    for(i = 0; i < 7; i++){
+      Serial.print("Minute on day");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(closingAlarms[i].minute);
+      Serial.print("Mode on day");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(closingAlarms[i].mode);
+    }
+
+  }
+}
+  
 
 
 
@@ -1930,11 +2012,14 @@ void setup()
   pinMode(LCD_BL_EN, OUTPUT);
   pinMode(LED, OUTPUT);
 
-  Wire.setPins(I2C_SDA, I2C_SCL);
-  Wire.begin();
-
   Serial.begin(115200);
   lcd.begin(16,2);
+  Wire.setPins(I2C_SDA, I2C_SCL);
+  Wire.begin();
+  memory.begin("storage", false);
+
+  readValuesFromFlash();
+
   lcd.createChar(M_INV, M_inv);
   lcd.createChar(o_INV, o_inv);
   lcd.createChar(D_INV, D_inv);
@@ -1947,7 +2032,7 @@ void setup()
 
   if (rtc.begin() == false)
   {
-    Serial.println("Device not found. Please check wiring. Freezing.");
+    // Serial.println("Device not found. Please check wiring. Freezing.");
 
     //TODO: Error handling
   }
@@ -1969,8 +2054,8 @@ void loop()
 
 
   menuUpdate();
-  Serial.print("menuId ");
-  Serial.println(menu_id);
+  //// Serial.print("menuId ");
+  //// Serial.println(menu_id);
 
   delay(50); //simulate a delay as if other tasks are running
 }

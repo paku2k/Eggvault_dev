@@ -19,6 +19,7 @@ uint32_t actuations, seconds;
 
 long m_timer = 0;
 
+int m_pause = 0;
 
 void moveMotor(KLAPPENPOSITION pos)
 {
@@ -50,7 +51,14 @@ void moveMotor(KLAPPENPOSITION pos)
     {
       doorPosition = POS_DRIVING;
       Serial.println("pos driving");
-      
+      if(doorGoal == POS_DOWN){
+        digitalWrite(M_FWD, LOW);
+        digitalWrite(M_BACK, HIGH);
+      }
+      else{
+        digitalWrite(M_FWD, HIGH);
+        digitalWrite(M_BACK, LOW);
+      }
       //Klappe ist unten oder
       //Klappe ist zu leicht
     }
@@ -61,13 +69,13 @@ void moveMotor(KLAPPENPOSITION pos)
             Serial.println("pos up");
       if(doorPosition == pos){
         digitalWrite(M_FWD, LOW);
-      digitalWrite(M_BACK, LOW);
+        digitalWrite(M_BACK, LOW);
       break;
       }
       else{
-      digitalWrite(M_FWD, LOW);
-      digitalWrite(M_BACK, HIGH);
-    }
+        digitalWrite(M_FWD, LOW);
+        digitalWrite(M_BACK, HIGH);
+      }
       lcd.setCursor(15, 0);
       lcd.print("v");
       //timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); //TODO: Implement Blocked Timer
@@ -170,28 +178,46 @@ void loop(){
   lcd.print("V");
   Serial.println(vbatt.readVoltage());
 
-  if(digitalRead(SW_BACK) && digitalRead(SW_FWD)){
+  if(digitalRead(SW_SELECT) && digitalRead(SW_EXIT)){
     seconds = 0;
     actuations = 0;
     memory.putUInt(key_n, 0);
     memory.putUInt(key_s, 0);
     lcd.clear();
   }
-  if(doorGoal == POS_UP){
-    doorGoal = POS_DOWN;
+  if(digitalRead(SW_EXIT)){
+    if(m_pause== 1){
+      m_pause = 0;
+    }
+    else{
+      m_pause = 1;
+    }
   }
-  else{
-    doorGoal = POS_UP;
-  }
-  moveMotor(doorGoal);
-  delay(1500);
-  
+  if(m_pause == 0){
+    if(doorGoal == POS_UP){
+      doorGoal = POS_DOWN;
+    }
+    else{
+      doorGoal = POS_UP;
+    }
+    moveMotor(doorGoal);
+    delay(1500);
+    
 
-  seconds = seconds + (millis()-m_timer)/1000;
-  
-  actuations = actuations+1;
-  memory.putUInt(key_n, actuations);
-  memory.putUInt(key_s, seconds);
+    seconds = seconds + (millis()-m_timer)/1000;
+    
+    actuations = actuations+1;
+    memory.putUInt(key_n, actuations);
+    memory.putUInt(key_s, seconds);
+}
+else{
+  lcd.setCursor(0,0);
+  lcd.print("PAUSE");
+  delay(1000);
+  lcd.clear();
+  }
+
+Serial.println(m_pause);
 
 }
 

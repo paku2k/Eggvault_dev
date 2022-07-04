@@ -11,6 +11,7 @@
 #include <TimeLib.h>
 #include <Wire.h>
 //#include "arduino-esp32\arduino-esp32-master\tools\sdk\include\driver\driver\rtc_io.h"
+#include <Preferences.h>
 
 
 #include <menu.h>
