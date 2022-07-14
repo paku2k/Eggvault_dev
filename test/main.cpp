@@ -130,6 +130,7 @@ byte button_flag = 0;
 unsigned long previousMillis = millis();
 unsigned long blinkZero = millis();
 byte blink = 0;
+byte manualFlag = 0; //TODO: implement manual Flag
 
 
 // ================================================
@@ -1767,6 +1768,84 @@ void setAlarmTomorrow0()
 
 void setNextOpeningAlarm(){
   //TODO: Implement next opening logic
+  nextMove = POS_UP;
+  LDRFlag = POS_BLOCKED;
+  alarmFlag = POS_BLOCKED;
+  nextLux = openingAlarms[weekday(t_now)].lux;
+  switch (openingAlarms[weekday(t_now)].mode)
+  {
+  case ZEIT:
+    if( (openingAlarms[weekday(t_now)].hour*60 + openingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
+        {
+          alarmFlag = nextMove;
+          setAlarm(weekday(t_now), openingAlarms[weekday(t_now)].hour, openingAlarms[weekday(t_now)].minute);
+          esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+        }
+
+        else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
+        {
+          alarmFlag = POS_BLOCKED;
+          setAlarmTomorrow0();
+          esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+        }
+        
+        PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
+    
+    break;
+
+  case LICHT:
+    alarmFlag = POS_BLOCKED;
+    setAlarmTomorrow0();
+    esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+    
+    if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
+      {
+        LDRFlag = nextMove;
+        esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
+      } 
+      else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
+      {
+        LDRFlag = nextMove;
+        activateLDR();
+      }
+
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
+
+    break;
+
+  case LICHT_ZEIT:
+    if( (openingAlarms[weekday(t_now)].hour*60 + openingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
+        {
+          alarmFlag = POS_BLOCKED;
+          setAlarm(weekday(t_now), openingAlarms[weekday(t_now)].hour, openingAlarms[weekday(t_now)].minute);
+          esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+        }
+
+        else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
+        {
+          alarmFlag = POS_BLOCKED;
+          setAlarmTomorrow0();
+          esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);    
+          if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
+            {
+              LDRFlag = nextMove;
+              esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
+            } 
+            else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
+            {
+              LDRFlag = nextMove;
+              activateLDR();
+            }
+        }
+        
+        PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
+    break;
+
+  case NICHT:
+
+    break;
+
+  }
 }
 
 
@@ -1780,7 +1859,7 @@ void setNextClosingAlarm(){
   switch (closingAlarms[weekday(t_now)].mode)
   {
   case ZEIT:
-    if( (closingAlarms[weekday(t_now)].hour*60 + closingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)) ) //Alarm noch nicht vergangen
+    if( (closingAlarms[weekday(t_now)].hour*60 + closingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
     {
       alarmFlag = nextMove;
       setAlarm(weekday(t_now), closingAlarms[weekday(t_now)].hour, closingAlarms[weekday(t_now)].minute);
@@ -1823,7 +1902,7 @@ void setNextClosingAlarm(){
 
   case LICHT_ZEIT:
 
-    if( (closingAlarms[weekday(t_now)].hour*60 + closingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)) ) //Alarm noch nicht vergangen
+    if( (closingAlarms[weekday(t_now)].hour*60 + closingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
     {
       alarmFlag = nextMove;
       setAlarm(weekday(t_now), closingAlarms[weekday(t_now)].hour, closingAlarms[weekday(t_now)].minute);
@@ -1955,15 +2034,17 @@ int readValuesFromFlash(){
     // set Alarms to default
     setAlarmsDefault();
     Serial.println("No values to read --> default");
+    memory.putBytes(keyOpenAlarms, openingAlarms, sizeof(doorDayAlarm_t[7]));
+    memory.putBytes(keyCloseAlarms, closingAlarms, sizeof(doorDayAlarm_t[7]));
   }
   else{
     // char buffer[sizeof(doorDayAlarm_t[7])];
     memory.getBytes(keyOpenAlarms, openingAlarms, 7*sizeof(doorDayAlarm_t));
     memory.getBytes(keyCloseAlarms, closingAlarms, 7*sizeof(doorDayAlarm_t));
-
-    int i;
     Serial.println("Alarms read --> printing opening Alarms");
-    for(i = 0; i < 7; i++){
+  }
+    
+    for(int i = 0; i < 7; i++){
       Serial.print("Minute on day");
       Serial.print(i);
       Serial.print(": ");
@@ -1975,7 +2056,7 @@ int readValuesFromFlash(){
     }
 
     Serial.println("Alarms read --> printing closing Alarms");
-    for(i = 0; i < 7; i++){
+    for(int i = 0; i < 7; i++){
       Serial.print("Minute on day");
       Serial.print(i);
       Serial.print(": ");
@@ -1986,7 +2067,7 @@ int readValuesFromFlash(){
       Serial.println(closingAlarms[i].mode);
     }
 
-  }
+  
 }
   
 

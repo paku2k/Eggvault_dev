@@ -13,13 +13,35 @@ KLAPPENPOSITION doorPosition, doorGoal;
 const char* key_n = "motor_act";
 const char* key_s = "motor_tim";
 
-uint32_t time_up = 120;
+uint32_t time_up = 240;
 
 uint32_t actuations, seconds;
 
 long m_timer = 0;
 
 int m_pause = 0;
+
+void printLCD(){
+  
+    lcd.setCursor(0,0);
+    lcd.print("N:");
+    lcd.print(actuations);
+    lcd.setCursor(7, 0);
+    lcd.print("L:");
+    lcd.print(ldr.readVoltage(), 2);
+    lcd.setCursor(0, 1);
+    lcd.print("T: ");
+    lcd.print(seconds);
+    lcd.setCursor(11, 1);
+    lcd.print((vbatt.readVoltage() * (6.0 / 1.0)) + 0.3, 2);
+    lcd.setCursor(15,1 );
+    lcd.print("V");
+    Serial.println(vbatt.readVoltage());
+
+
+  
+}
+
 
 void moveMotor(KLAPPENPOSITION pos)
 {
@@ -29,6 +51,7 @@ void moveMotor(KLAPPENPOSITION pos)
   do
  
   {
+    if(millis()%200 == 0){printLCD();}
     if((millis()-m_timer)/1000 > time_up){
         lcd.clear();
         lcd.setCursor(0,0);
@@ -115,9 +138,19 @@ void moveMotor(KLAPPENPOSITION pos)
 
       //timerMoving = timerBegin(MOVING_TIMER, t_err_open, true); //TODO: Implement Moving Timer
     }
+  if(digitalRead(SW_EXIT)){
+    if(m_pause== 1){
+      m_pause = 0;
+    }
+    else{
+      m_pause = 1;
+      break;
+    }
+  }
   }
   while (doorPosition != pos);
 }
+
 
 
 void setup(){
@@ -164,19 +197,10 @@ void setup(){
 
 void loop(){
   //LDR und spannungsmesser aktivieren
+  delay(300);
   digitalWrite(LDR_EN, HIGH);
   m_timer = millis();
-  lcd.setCursor(0,0);
-  lcd.print("N: ");
-  lcd.print(actuations);
-  lcd.setCursor(0, 1);
-  lcd.print("T: ");
-  lcd.print(seconds);
-  lcd.setCursor(11, 1);
-  lcd.print((vbatt.readVoltage() * (6.0 / 1.0)) + 0.3, 2);
-  lcd.setCursor(15,1 );
-  lcd.print("V");
-  Serial.println(vbatt.readVoltage());
+  
 
   if(digitalRead(SW_SELECT) && digitalRead(SW_EXIT)){
     seconds = 0;
@@ -188,6 +212,7 @@ void loop(){
   if(digitalRead(SW_EXIT)){
     if(m_pause== 1){
       m_pause = 0;
+      m_timer = millis();
     }
     else{
       m_pause = 1;
@@ -211,10 +236,12 @@ void loop(){
     memory.putUInt(key_s, seconds);
 }
 else{
-  lcd.setCursor(0,0);
-  lcd.print("PAUSE");
-  delay(1000);
-  lcd.clear();
+
+  printLCD();
+  digitalWrite(M_FWD, LOW);
+  digitalWrite(M_BACK, LOW);
+  delay(200);
+  
   }
 
 Serial.println(m_pause);
