@@ -11,11 +11,14 @@ doorDayAlarm_t openingAlarms[7];
 doorDayAlarm_t closingAlarms[7];
 const char* keyOpenAlarms = "open_alarm";
 const char* keyCloseAlarms = "close_alarm";
+const char* keyLDRFlag = "LDR_flag";
+const char* keyAlarmFlag = "alarm_flag";
+const char* keyLastMove = "last_move";
 
 // uint8_t luxMap[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 uint32_t voltMap[10] = {300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000};
 
-int16_t Year = 2000;
+int16_t Year = 2020;
 int8_t Month;
 int8_t Date;
 int8_t DoW;
@@ -171,6 +174,9 @@ byte day_bitmask = 0b0000000; // MO_DI_MI_DO_FR_SA_SO
 int menu_id = 100;
 
 void saveAlarmValues();
+void IRAM_ATTR moveMotor(KLAPPENPOSITION pos);
+void statusabfrage();
+void saveTimeSetting();
 
 // ================================================================================================
 // ================================================================================================
@@ -186,16 +192,27 @@ void saveAlarmValues();
 
 void timeUpdate(){
   tmElements_t tmels;
+  Serial.println("Getting current time");
+  rtc.updateTime();
 
-  tmels.Minute = rtc.getDate();
+  tmels.Day = rtc.getDate();
+  Date = tmels.Day;
   tmels.Month = rtc.getMonth();
-  tmels.Year = rtc.getYear();
+  Month = tmels.Month;
+  tmels.Year = rtc.getYear()-1970;
+  Year = tmels.Year+1970;
   tmels.Wday = rtc.getWeekday();
+  DoW = tmels.Wday;
 
   tmels.Hour = rtc.getHours();
+  Hour = tmels.Hour;
   tmels.Minute = rtc.getMinutes();
+  Minute = tmels.Minute;
   tmels.Second = rtc.getSeconds();
+  Second = tmels.Second;
 
+  //TODO: check DoW conversion / automatic setting
+  //TODO: implement init time setting (wenn init = 0)
   t_now = makeTime(tmels);
 
 }
@@ -727,6 +744,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 
         if(timeSetMode == SETNOTHING){
           struct tm *tmp = gmtime(&t_now);
+          timeUpdate();
           //TODO: get current time
         }    
 
@@ -778,6 +796,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
         case SELECT:
             if(timeSetMode == SETMINUTE){
               //TODO: Implement saveTimeSetting();
+              saveTimeSetting();
               timeSetMode = SETNOTHING;
             }
             else if(timeSetMode == SETNOTHING){
@@ -796,6 +815,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
             }
             else{
               //TODO: Implement saveTimeSetting();
+              saveTimeSetting();
               timeSetMode = SETNOTHING;
             }
             break;
@@ -850,6 +870,8 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
 
 
 
+
+
 // ================================================
 // ================= Datum: =======================
 // ================================================
@@ -859,6 +881,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
         if(timeSetMode == SETNOTHING){
           struct tm *tmp = gmtime(&t_now);
           //TODO: get current date
+          timeUpdate();
         } 
 
         if(timeSetMode != SETDAY){ // Set monthly days to max if month or year changed
@@ -940,6 +963,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
             }
             else if(timeSetMode == SETYEAR){
               //TODO: Implement saveTimeSetting();
+              saveTimeSetting();
               timeSetMode = SETNOTHING;
             }
             else if(timeSetMode == SETNOTHING){
@@ -955,6 +979,7 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
             }
             else{
               //TODO: Implement saveTimeSetting();
+              saveTimeSetting();
               timeSetMode = SETNOTHING;
             }
             break;
@@ -1148,6 +1173,9 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
     
     case SELECT:
         menu_id = 710; // Reset untermenu
+        esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+        PREP_FOR_DEEP_SLEEP //TODO: reset ersetzen
+
         break;
 
 
@@ -1532,11 +1560,13 @@ void menuFunctions(BTNAction action)  // Ihre Menüfunktionen
     }
 
     saveAlarmValues();
-
+    //TODO: einmaliges speichern
     lcd.setCursor(0, 0);
     lcd.print(MenuItemsMode[9][lang]);
     lcd.noBlink();
     lcd.noCursor();
+
+    statusabfrage();
   }
 }
 
@@ -1580,6 +1610,8 @@ void menuUpdate(){
     button_flag = 0;
   }
 
+  //TODO: drücken und halten implementieren
+
   if(((millis()-blinkZero)/500)%2 == 0){
     blink = 0;
   }
@@ -1602,6 +1634,11 @@ void menuUpdate(){
 // ================================================================================================
 // ================================================================================================
 
+
+
+void saveTimeSetting(){
+  rtc.setTime(Second, Minute, Hour, DoW, Date, Month, Year);
+}
 
 uint8_t VoltToLux(uint32_t mV){
   uint32_t m_mV = mV;
@@ -1645,7 +1682,8 @@ void activateLDR(){
     if(getLux() <= nextLux){
       ramCounter ++;
       if (ramCounter >= lux_debounce_number){ // Counter voll
-        //TODO: Close Klappe
+        //TODO: Close klappe
+        moveMotor(POS_DOWN);
       }
       else{ // Counter noch nicht voll
         esp_sleep_enable_timer_wakeup(S_TO_uS * lux_debounce_time );
@@ -1657,12 +1695,13 @@ void activateLDR(){
       ramCounter = 0;
     }
   }
-  else{
-    // als nächstes Schließen
-    if(getLux() <= nextLux){
+  else if(LDRFlag == POS_UP){
+    // als nächstes Öffnen
+    if(getLux() >= nextLux){
       ramCounter ++;
       if (ramCounter >= lux_debounce_number){ // Counter voll
-        //TODO: Close Klappe
+        //TODO: Open Klappe
+        moveMotor(POS_UP);
       }
       else{ // Counter noch nicht voll
         esp_sleep_enable_timer_wakeup(S_TO_uS * lux_debounce_time );
@@ -1676,60 +1715,6 @@ void activateLDR(){
   }
   rtc.writeRegister(RV8803_RAM, ramCounter);
 
-}
-
-
-
-
-
-
-void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
-{
-  digitalWrite(LED, HIGH);
-  while (doorPosition != pos)
-  {
-    pinMode(END_LOW, INPUT_PULLUP);
-    pinMode(END_UP, INPUT_PULLUP);
-
-    byte up = digitalRead(END_UP);
-    byte low = digitalRead(END_LOW);
-    if (up && !low)
-    {
-      doorPosition = POS_DOWN;
-      digitalWrite(M_FWD, HIGH);
-      digitalWrite(M_BACK, LOW);
-      //Klappe ist unten oder
-      //Klappe ist zu leicht
-    }
-    else if (up && low)
-    { //Klappe hängt fest
-
-      doorPosition = POS_BLOCKED;
-      timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); //TODO: Implement Blocked Timer
-    }
-    else if (!up && low)
-    {
-      doorPosition = POS_UP;
-      digitalWrite(M_FWD, LOW);
-      digitalWrite(M_BACK, HIGH);
-      //Klappe ist oben
-    }
-    else if (!up && !low)
-    { //Klappe fährt grade  oder
-
-      doorPosition = POS_DRIVING;
-      timerMoving = timerBegin(MOVING_TIMER, t_err_open, true); //TODO: Implement Moving Timer
-    }
-  }
-}
-
-uint64_t GPIO_wake_up_reason()
-{
-  uint64_t GPIO_reason = esp_sleep_get_ext1_wakeup_status();
-  //// Serial.print("GPIO that triggered the wake up: GPIO ");
-  GPIO_reason = (log(GPIO_reason)) / log(2);
-  return GPIO_reason;
-  //// Serial.println(GPIO_reason);
 }
 
 
@@ -1767,29 +1752,44 @@ void setAlarmTomorrow0()
 
 
 void setNextOpeningAlarm(){
-  //TODO: Implement next opening logic
+  Serial.println("Setze öffnungsalarm und gehe schlafen");
+
   nextMove = POS_UP;
   LDRFlag = POS_BLOCKED;
   alarmFlag = POS_BLOCKED;
   nextLux = openingAlarms[weekday(t_now)].lux;
+  if(manualFlag){
+    alarmFlag = POS_BLOCKED;
+    setAlarmTomorrow0();
+    esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+  }
+  memory.putInt("init_flag", 1); // flags wurden gesetzt
+
   switch (openingAlarms[weekday(t_now)].mode)
   {
   case ZEIT:
-    if( (openingAlarms[weekday(t_now)].hour*60 + openingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
+    if(!manualFlag){
+      if( (openingAlarms[weekday(t_now)].hour*60 + openingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
         {
+          Serial.print("Öffnungsalarm noch nicht vergangen, setze alarm auf Stunde: ");
+          Serial.print(openingAlarms[weekday(t_now)].hour);
+          Serial.print(" und Minute: ");
+          Serial.println(openingAlarms[weekday(t_now)].minute);
           alarmFlag = nextMove;
           setAlarm(weekday(t_now), openingAlarms[weekday(t_now)].hour, openingAlarms[weekday(t_now)].minute);
           esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
         }
 
-        else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
-        {
-          alarmFlag = POS_BLOCKED;
-          setAlarmTomorrow0();
-          esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
-        }
+      else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
+      {
+        Serial.println("Öffnungsalarm bereits vergangen, setze alarm Morgen 0 Uhr");
+        alarmFlag = POS_BLOCKED;
+        setAlarmTomorrow0();
+        esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+      }
+    }
         
-        PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
     
     break;
 
@@ -1797,31 +1797,36 @@ void setNextOpeningAlarm(){
     alarmFlag = POS_BLOCKED;
     setAlarmTomorrow0();
     esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
-    
-    if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
-      {
-        LDRFlag = nextMove;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
-      } 
-      else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
-      {
-        LDRFlag = nextMove;
-        activateLDR();
-      }
+    if(!manualFlag){
+      //LDR wird nur aktiviert wenn nicht manuell geschlossen wurde
 
+      if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
+        {
+          LDRFlag = nextMove;
+          esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
+        } 
+      else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
+        {
+          LDRFlag = nextMove;
+          activateLDR();
+        }
+    }
     PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
 
     break;
 
   case LICHT_ZEIT:
-    if( (openingAlarms[weekday(t_now)].hour*60 + openingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
+    if(!manualFlag){
+      //LDR wird nur aktiviert wenn nicht manuell geschlossen wurde
+      
+      if( (openingAlarms[weekday(t_now)].hour*60 + openingAlarms[weekday(t_now)].minute) > (hour(t_now)*60 + minute(t_now)+1) ) //Alarm noch nicht vergangen
         {
           alarmFlag = POS_BLOCKED;
           setAlarm(weekday(t_now), openingAlarms[weekday(t_now)].hour, openingAlarms[weekday(t_now)].minute);
           esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
         }
 
-        else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
+      else //Alarm schon vergangen, setze Alarm auf morgen 00:01 Uhr
         {
           alarmFlag = POS_BLOCKED;
           setAlarmTomorrow0();
@@ -1837,24 +1842,37 @@ void setNextOpeningAlarm(){
               activateLDR();
             }
         }
-        
-        PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
+      }
+      PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
     break;
 
   case NICHT:
+    alarmFlag = POS_BLOCKED;
+    setAlarmTomorrow0();
+    esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
 
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
     break;
 
   }
+
+
 }
 
 
 
-
 void setNextClosingAlarm(){
+  Serial.println("Setze schließalarm und gehe schlafen");
   nextMove = POS_DOWN;
   LDRFlag = POS_BLOCKED;
   alarmFlag = POS_BLOCKED;
+  if(manualFlag){
+    alarmFlag = POS_BLOCKED;
+    setAlarmTomorrow0();
+    esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+  }
+  memory.putInt("init_flag", 1); // flags wurden gesetzt
+
   nextLux = closingAlarms[weekday(t_now)].lux;
   switch (closingAlarms[weekday(t_now)].mode)
   {
@@ -1882,16 +1900,20 @@ void setNextClosingAlarm(){
     alarmFlag = POS_BLOCKED;
     setAlarmTomorrow0();
     esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
-    
-    if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
-    {
-      LDRFlag = nextMove;
-      esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
-    } 
-    else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
-    {
-      LDRFlag = nextMove;
-      activateLDR();
+    if(!manualFlag){
+      // wird bei Licht nur geschlossen, wenn nicht manuell geöffnet wurde
+
+      if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
+      {
+        LDRFlag = nextMove;
+        esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
+      } 
+      else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
+      {
+        LDRFlag = nextMove;
+        activateLDR();
+      }
+
     }
 
     PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
@@ -1906,16 +1928,20 @@ void setNextClosingAlarm(){
     {
       alarmFlag = nextMove;
       setAlarm(weekday(t_now), closingAlarms[weekday(t_now)].hour, closingAlarms[weekday(t_now)].minute);
+      esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
       
-      if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
-      {
-        LDRFlag = nextMove;
-        esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
-      } 
-      else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
-      {
-        LDRFlag = nextMove;
-        activateLDR();
+      if(!manualFlag){
+        // Sensor wird bei LichtZeit nur aktiviert, wenn nicht manuell geöffnet wurde
+        if(lastMove + t_delta_min > t_now+1) //Letzte Bewegung noch nicht lange genug her
+        {
+          LDRFlag = nextMove;
+          esp_sleep_enable_timer_wakeup(S_TO_uS * (lastMove + t_delta_min - t_now) );
+        } 
+        else // Letzte Bewegung schon lange genug her um LDR zu aktivieren
+        {
+          LDRFlag = nextMove;
+          activateLDR();
+        } 
       }
 
     }
@@ -1937,14 +1963,51 @@ void setNextClosingAlarm(){
   case NICHT:
     alarmFlag = POS_BLOCKED;
     setAlarmTomorrow0();
+    esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+
+    PREP_FOR_DEEP_SLEEP //TODO: Deep Sleep with alarm interrupt
     break;
   }
+
+
 }
 
 void statusabfrage(){
+  Serial.println("Statusabfrage");
+  pinMode(END_LOW, INPUT_PULLUP);
+  pinMode(END_UP, INPUT_PULLUP);
+
+  byte up = digitalRead(END_UP);
+  byte low = digitalRead(END_LOW);
+  if (!up && !low)
+  {
+    doorPosition = POS_DOWN;
+    //Klappe ist unten oder
+    //Klappe ist zu leicht
+    Serial.println("Klappe ist unten");
+  }
+  else if (!up && low)
+  { //Klappe hängt fest
+    doorPosition = POS_BLOCKED;
+    Serial.println("Klappe ist stuck");
+  }
+  else if (up && low)
+  {
+    doorPosition = POS_UP;
+    Serial.println("Klappe ist oben");
+    //Klappe ist oben
+  }
+  else if (up && !low)
+  { //Klappe fährt grade  oder
+    doorPosition = POS_DRIVING;
+    Serial.println("Klappe fährt");
+  }
+
+
+
   switch (doorPosition){
     case POS_UP:
-     // setNextClosingAlarm(); //TODO: ImpelementClosing alarm
+      setNextClosingAlarm(); 
     break;
     
 
@@ -1962,7 +2025,70 @@ void statusabfrage(){
     //TODO: do nothing or wait?
     break;
   }
+ 
+
+  
+  
 }
+
+
+void IRAM_ATTR moveMotor(KLAPPENPOSITION pos)
+{
+  digitalWrite(LED, HIGH); //TODO: remove LED
+  while (doorPosition != pos)
+  {
+    pinMode(END_LOW, INPUT_PULLUP);
+    pinMode(END_UP, INPUT_PULLUP);
+
+    byte up = digitalRead(END_UP);
+    byte low = digitalRead(END_LOW);
+    if (!up && !low)
+    {
+      doorPosition = POS_DOWN;
+      digitalWrite(M_FWD, HIGH);
+      digitalWrite(M_BACK, LOW);
+      //Klappe ist unten oder
+      //Klappe ist zu leicht
+    }
+    else if (!up && low)
+    { //Klappe hängt fest
+
+      doorPosition = POS_BLOCKED;
+      timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); //TODO: Implement Blocked Timer
+    }
+    else if (up && low)
+    {
+      doorPosition = POS_UP;
+      digitalWrite(M_FWD, LOW);
+      digitalWrite(M_BACK, HIGH);
+      //Klappe ist oben
+    }
+    else if (up && !low)
+    { //Klappe fährt grade  oder
+
+      doorPosition = POS_DRIVING;
+      timerMoving = timerBegin(MOVING_TIMER, t_err_open, true); //TODO: Implement Moving Timer
+    }
+  }
+  digitalWrite(M_FWD, LOW);
+  digitalWrite(M_BACK, LOW);
+  
+  statusabfrage();
+}
+
+uint64_t GPIO_wake_up_reason()
+{
+  uint64_t GPIO_reason = esp_sleep_get_ext1_wakeup_status();
+  Serial.print("GPIO that triggered the wake up: GPIO ");
+  GPIO_reason = (log(GPIO_reason)) / log(2);
+  Serial.println(GPIO_reason);
+  return GPIO_reason;
+  
+}
+
+
+
+
 
 void saveAlarmValues(){
   int i;
@@ -1999,6 +2125,12 @@ void saveAlarmValues(){
 
 }
 
+void writeValuesToFlash(){
+  memory.putBytes(keyAlarmFlag, &alarmFlag, sizeof(KLAPPENPOSITION));
+  memory.putBytes(keyLDRFlag, &LDRFlag, sizeof(KLAPPENPOSITION));
+  memory.putBytes(keyLastMove, &lastMove, sizeof(time_t));
+}
+
 void setAlarmsDefault(){
   doorDayAlarm_t buf_o;
   doorDayAlarm_t buf_c;
@@ -2008,13 +2140,14 @@ void setAlarmsDefault(){
   buf_o.hour = 12;
   buf_o.minute = 30;
   buf_o.mode = NICHT;
-
-
+  buf_o.lux = 0;
+  
   buf_c.delay = 0;
   buf_c.done = 0;
   buf_c.hour = 20;
   buf_c.minute = 30;
   buf_c.mode = NICHT;
+  buf_c.lux = 0;
 
 
   int i;
@@ -2029,6 +2162,18 @@ void setAlarmsDefault(){
 int readValuesFromFlash(){
   // char buf_o[sizeof(doorDayAlarm_t[7])];
 
+  int init_flag = memory.getInt("init_flag", 0);
+  if(init_flag == 0){ // keine flags gesetzt bis jeztz
+    LDRFlag = POS_BLOCKED;
+    alarmFlag = POS_BLOCKED;
+    lastMove = 0;
+  }
+  else{ // Flags aus Speicher lesen
+    memory.getBytes(keyLDRFlag, &LDRFlag, sizeof(KLAPPENPOSITION));
+    memory.getBytes(keyAlarmFlag, &alarmFlag, sizeof(KLAPPENPOSITION));
+    memory.getBytes(keyLastMove, &lastMove, sizeof(time_t));
+  }
+
   int init = memory.getInt("init", 0);
   if(init == 0){
     // set Alarms to default
@@ -2039,6 +2184,8 @@ int readValuesFromFlash(){
   }
   else{
     // char buffer[sizeof(doorDayAlarm_t[7])];
+
+
     memory.getBytes(keyOpenAlarms, openingAlarms, 7*sizeof(doorDayAlarm_t));
     memory.getBytes(keyCloseAlarms, closingAlarms, 7*sizeof(doorDayAlarm_t));
     Serial.println("Alarms read --> printing opening Alarms");
@@ -2070,7 +2217,91 @@ int readValuesFromFlash(){
   
 }
   
+void alarmWakeupHandling(){
+  switch(alarmFlag)
+  {
+    case POS_DOWN:
+      moveMotor(POS_DOWN);
+    break;
 
+    case POS_UP:
+      moveMotor(POS_UP);
+    break;
+
+    case POS_BLOCKED:
+      statusabfrage();
+    break;
+
+    default:
+    //TODO: error handling
+    break;
+  }
+}
+
+void timerWakeupHandling(){
+  //TODO: timer wakeup handling implementieren
+  activateLDR();
+}
+
+
+//TODO: implement alarm recognition while menu is active (CPU awake)
+
+void wakeupHandling(){
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  uint64_t w_pin;
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch(wakeup_reason)
+  {
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1 :
+      Serial.println("Wakeup caused by external buttons");
+      w_pin  = GPIO_wake_up_reason();
+      switch(w_pin)
+      {
+        case CLK_INT:
+          manualFlag = 0;
+          Serial.println("wakeup by alarm");
+          alarmWakeupHandling();
+        break;
+
+        case SW_BACK:
+        //TODO: implement wakeup by btn down
+        manualFlag = 1;
+        moveMotor(POS_DOWN);
+        
+        break;
+
+        case SW_FWD:
+        //TODO: implement wakeup by btn up
+        manualFlag = 1;
+        moveMotor(POS_UP);
+       
+        break;
+
+        case SW_EXIT:
+        //TODO: implement wakeup by btn left
+        break;
+
+        case SW_SELECT:
+        //TODO: implement wakeup by btn right
+        break;
+
+        default:
+        //TODO: error handling andere knöpfe
+        break;
+      }
+     break;
+
+    case ESP_SLEEP_WAKEUP_TIMER :
+      Serial.println("Wakeup caused by timer"); 
+      timerWakeupHandling();
+    break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+  }
+}
 
 
 
@@ -2117,6 +2348,8 @@ void setup()
 
     //TODO: Error handling
   }
+  rtc.set24Hour(); //TODO: 12hour mode
+  timeUpdate();
   LCD_ON;
   digitalWrite(LDR_EN, HIGH);
   delay(50);
@@ -2126,7 +2359,7 @@ void setup()
   delay (500);
   blinkZero = millis();
   menu_id = 100;
-  //print_wakeup_reason();
+  wakeupHandling();
 }
 
 

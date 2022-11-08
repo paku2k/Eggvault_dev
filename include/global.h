@@ -21,6 +21,7 @@
 #include <menuIO/serialIn.h>
 
 using namespace Menu;
+void writeValuesToFlash();
 
 #define MAX_DEPTH 4
 
@@ -34,13 +35,16 @@ using namespace Menu;
                 pinMode(LCD_BL_EN, INPUT);
 
 #define PREP_FOR_DEEP_SLEEP for (int i=12; i<32; i++) { \
-                        if((i!=21)&&(i!=24)&&(i!=29)&&(i!=34)&&(i!=39)&&(i!=35)&&(i!=36)&&(i!=3)){\
+                        if((i!=21)&&(i!=24)&&(i!=29)&&(i!=34)&&(i!=39)&&(i!=35)&&(i!=36)&&(i!=3)&&(i!=20)&&(i!=28)&&(i!=29)&&(i!=30)&&(i!=31)){\
                         gpio_set_pull_mode((gpio_num_t)i, GPIO_FLOATING);\
          }\
-       }
+       }\
+       writeValuesToFlash();\
+       delay(1000);\
+       esp_deep_sleep_start();\
 
-#define WAKEUP_PINMASK 0xF08000000
-
+//#define WAKEUP_PINMASK 0xF08000000
+#define WAKEUP_PINMASK 0x008000000
 //pins
 #define LED 2
 #define LCD_RS 4
@@ -96,6 +100,8 @@ enum Setmode {SETMINUTE, SETHOUR, SETNOTHING, SETLUX, SETDAY, SETMONTH, SETYEAR,
 enum Daymode {WEEK, WEEKEND, DAILY};
 enum Modeset {MODESET_OPENING, MODESET_CLOSING};
 enum Days {MON, TUE, WED, THU, FRI, SAT, SUN};
+
+// enum wakeup_reason {TIMER, ALARM, BTN_UP, BTN_DOWN, BTN_RIGHT, BTN_LEFT, END_UP, END_LOW};
 
 #define MONDAY 0b01000000
 #define TUESDAY 0b00100000

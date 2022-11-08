@@ -8,5 +8,6 @@
         "*.tcc": "cpp",
         "sstream": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "todo-tree.tree.showBadges": false
 }
