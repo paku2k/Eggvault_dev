@@ -8,6 +8,45 @@ ESP32AnalogRead ldr;
 
 
 
+void wakeupHandling()
+{
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  uint64_t w_pin;
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+  delay(5000); 
+  PREP_FOR_DEEP_SLEEP
+  
+  switch (wakeup_reason)
+  {
+  case ESP_SLEEP_WAKEUP_EXT0:
+    Serial.println("Wakeup caused by external signal using RTC_IO");
+    break;
+  case ESP_SLEEP_WAKEUP_EXT1:
+    Serial.println("Wakeup caused by external buttons");
+    break;
+
+  case ESP_SLEEP_WAKEUP_TIMER:
+    Serial.println("Wakeup caused by timer");
+    esp_sleep_enable_timer_wakeup(30*S_TO_uS);
+  
+    break;
+  case ESP_SLEEP_WAKEUP_TOUCHPAD:
+    Serial.println("Wakeup caused by touchpad");
+    break;
+  case ESP_SLEEP_WAKEUP_ULP:
+    Serial.println("Wakeup caused by ULP program");
+    break;
+  default:
+    Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
+    esp_sleep_enable_timer_wakeup(30*S_TO_uS); // Timer wird überschrieben wenn zwischendurch wach !
+    // TODO: default wakeup handling
+    break;
+  }
+  esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+
+  Serial.println("Starting Sleep!!!");
+  esp_deep_sleep_start();
+}
 
 
 void setup()
@@ -33,16 +72,15 @@ void setup()
   digitalWrite(LED, HIGH);
   Serial.begin(1152000);
   Serial.println("Woke Up like this");
+  wakeupHandling();
 
 }
+
+
 
 void loop()
 {
   
-  delay(5000); 
-  PREP_FOR_DEEP_SLEEP
-  esp_sleep_enable_timer_wakeup(5*S_TO_uS);
-  Serial.println("Starting Sleep!!!");
-  esp_deep_sleep_start();
+
 }
 

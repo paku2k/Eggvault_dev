@@ -14,14 +14,16 @@
 #include <Preferences.h>
 
 
-#include <menu.h>
-#include <menuIO/softKeyIn.h>
-#include <menuIO/liquidCrystalOut.h>
-#include <menuIO/chainStream.h>
-#include <menuIO/serialIn.h>
+//#include <menu.h>
+//#include <menuIO/softKeyIn.h>
+//#include <menuIO/liquidCrystalOut.h>
+//#include <menuIO/chainStream.h>
+//#include <menuIO/serialIn.h>
 
-using namespace Menu;
+//using namespace Menu;
 void writeValuesToFlash();
+void makeLocalTime();
+
 
 #define MAX_DEPTH 4
 
@@ -40,11 +42,14 @@ void writeValuesToFlash();
          }\
        }\
        writeValuesToFlash();\
-       delay(1000);\
+       LCD_OFF;\
+       delay(200);\
+       esp_sleep_enable_ext1_wakeup(WAKEUP_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);\
        esp_deep_sleep_start();\
 
+
 //#define WAKEUP_PINMASK 0xF08000000
-#define WAKEUP_PINMASK 0x008000000
+//#define WAKEUP_PINMASK 0x008000000
 //pins
 #define LED 2
 #define LCD_RS 4
@@ -77,10 +82,14 @@ void writeValuesToFlash();
 #define LDR_SLEEP 600 //Seconds Delay between Measurement
 #define LDR_MEAS_SLEEP 60 //Seconds Delay between Measurement, when threshold was broken
 #define CLOSE_LIGHT_BUFFER 60 //Minutes Delay before Closing by sensor takes place
+#define LONG_PRESS_STARTUP_DURATION 2000 //ms for a long press at startup 
 
 #define BATT_CRIT 5.3 //Critical Volts for Battery
 #define BATT_MIN  5.0 //Minimum Volts for Battery
 #define THRESHOLD_COUNT_MAX 2 //How often has the LDR to be over threshold
+
+#define LCD_OFF_TIME 10000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
+#define NOX_SLEEP_TIME 20000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
 
 #define MINLUX 0
 #define MAXLUX 9
@@ -103,13 +112,6 @@ enum Days {MON, TUE, WED, THU, FRI, SAT, SUN};
 
 // enum wakeup_reason {TIMER, ALARM, BTN_UP, BTN_DOWN, BTN_RIGHT, BTN_LEFT, END_UP, END_LOW};
 
-#define MONDAY 0b01000000
-#define TUESDAY 0b00100000
-#define WEDNESDAY 0b00010000
-#define THURSDAY 0b00001000
-#define FRIDAY 0b00000100
-#define SATURDAY 0b00000010
-#define SUNDAY 0b00000001
 
 #define M_INV 0
 #define o_INV 1
@@ -143,6 +145,29 @@ enum Days {MON, TUE, WED, THU, FRI, SAT, SUN};
 //   }
 
 // } mtime_t;
+
+
+byte arrowUp[] = {
+  B00100,
+  B01110,
+  B10101,
+  B00100,
+  B00100,
+  B00100,
+  B00100,
+  B00100
+};
+
+byte arrowDown[] = {
+  B00100,
+  B00100,
+  B00100,
+  B00100,
+  B00100,
+  B10101,
+  B01110,
+  B00100
+};
 
 
 byte M_inv[] = {

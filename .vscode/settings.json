@@ -9,5 +9,6 @@
         "sstream": "cpp",
         "typeinfo": "cpp"
     },
-    "todo-tree.tree.showBadges": false
+    "todo-tree.tree.showBadges": false,
+    "cmake.configureOnOpen": true
 }
