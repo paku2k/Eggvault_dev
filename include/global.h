@@ -88,8 +88,11 @@ void makeLocalTime();
 #define BATT_MIN  5.0 //Minimum Volts for Battery
 #define THRESHOLD_COUNT_MAX 2 //How often has the LDR to be over threshold
 
-#define LCD_OFF_TIME 10000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
-#define NOX_SLEEP_TIME 20000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
+#define LCD_OFF_TIME 100000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
+#define NOX_SLEEP_TIME 200000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
+#define BUTTON_DEBOUNCE_TIME_NORMAL 400 //Debounce time für normalen tastendruck
+#define BUTTON_LONG_PRESS_TIME 1500 //Zeit, nachdem ein long button press erkannt wurde
+#define BUTTON_DEBOUNCE_TIME_FAST 200 // Zeit die nach einem long button press für das inkrementieren gebraucht wird
 
 #define MINLUX 0
 #define MAXLUX 9
@@ -121,6 +124,13 @@ enum Days {MON, TUE, WED, THU, FRI, SAT, SUN};
 #define r_INV 5
 #define S_INV 6
 #define a_INV 7
+
+#define TIME_SYM 0
+#define LUX_SYM 1
+#define LUX_TIME_SYM 2
+#define ARROW_UP 3
+#define ARROW_DOWN 4
+
 
 // typedef struct Time{
 //   uint8_t minute;
@@ -166,6 +176,39 @@ byte arrowDown[] = {
   B00100,
   B10101,
   B01110,
+  B00100
+};
+
+byte time_sym[] = {
+  B00000,
+  B01110,
+  B10001,
+  B11101,
+  B10101,
+  B10101,
+  B01110,
+  B00000
+};
+
+byte lux_sym[] = {
+  B01110,
+  B10001,
+  B10001,
+  B10001,
+  B01010,
+  B01110,
+  B01110,
+  B00100
+};
+
+byte time_lux_sym[] = {
+  B00100,
+  B01110,
+  B10101,
+  B00100,
+  B00100,
+  B00100,
+  B00100,
   B00100
 };
 

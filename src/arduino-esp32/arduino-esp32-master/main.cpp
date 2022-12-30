@@ -21,7 +21,7 @@ uint32_t voltMap[10] = {300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000}
 int16_t Year = 2020;
 int8_t Month;
 int8_t Date;
-int8_t DoW;
+int8_t DoW; // Tag 1 ist Sonntag
 int8_t Hour;
 int8_t Minute;
 int8_t Second;
@@ -42,6 +42,7 @@ KLAPPENPOSITION alarmFlag = POS_DOWN; // Alarm kommt für Öffnen oder Schließe
 // byte LDRTimer = NO_TIMER;
 uint8_t nextLux;
 uint8_t ramCounter;
+byte blinkFactor = 8;
 
 int dammerungsverzogerung = 600; // TODO: Dämmerungsverzögerung implementieren
 byte lux_debounce_number = 3;    // < 16 !!!! wie oft muss die Lichtschwelle erreicht sein, bis die Klappe sich bewegt DARF NICHT GRÖßER ALS 16 SEIN
@@ -96,37 +97,68 @@ String MenuItems[8][3] = {
     {"EXIT", "EXIT", "EXIT"},
 };
 
-String MenuItemsSpecial[2][3] = {
+String MenuItemsSpecial[3][3] = {
     // MenuItems[itemID][Language]
     {"Besch"
      "\xE1"
      "tigt",
      "Busy", "blub"},
-    {"Next",
-     "Next", "blub"},
+    {"N"
+     "\xE1"
+     "chste Alarme:",
+     "Upcoming Alarms:", "blub"},
+    {"NOX H"
+     "\xF5"
+     "hnerklappe",
+     "NOX Chickendoor", "blub"},
 
 };
 
-String MenuItemsDays[12][3] = {
+String MenuItemsDays[7][3] = {
     // MenuItems[itemID][Language]
-    {"Woche", "week", "blub"},
-    {"Wochenende", "weekend", "blub"},
-    {"Tageweise", "daily", "blub"},
-    {"SA - SO", "Sat - Sun", "blub"},
-    {"MO - FR", "Mon - Fri", "blub"},
-    {"MO", "Mon", "lun"},
-    {"DI", "Tue", "mar"},
-    {"MI", "Wed", "mer"},
-    {"DO", "Thu", "jeu"},
-    {"FR", "Fri", "ven"},
-    {"SA", "Sat", "sam"},
-    {"SO", "Sun", "dim"},
+    {"So", "Su", "Di"},
+    {"Mo", "Mo", "Lu"},
+    {"Di", "Tu", "Ma"},
+    {"Mi", "We", "Me"},
+    {"Do", "Th", "Je"},
+    {"Fr", "Fr", "Ve"},
+    {"Sa", "Sa", "Sa"},
 };
+
+/*DE
+#define M_INV 0
+#define o_INV 1
+#define D_INV 2
+#define i_INV 3
+#define F_INV 4
+#define r_INV 5
+#define S_INV 6
+#define a_INV 7
+
+EN
+
+
+FR
+
+*/
+
+int MenuItemsDaysInv[7][3][2]{
+    // MenuItems[itemID][Language]
+    {{6, 1}, {6, 1}, {6, 1}},
+    {{0, 1}, {6, 1}, {6, 1}},
+    {{2, 3}, {6, 1}, {6, 1}},
+    {{0, 3}, {6, 1}, {6, 1}},
+    {{2, 1}, {6, 1}, {6, 1}},
+    {{4, 5}, {6, 1}, {6, 1}},
+    {{6, 7}, {6, 1}, {6, 1}},
+};
+
+// TODO: Multilanguage inverse characters
 
 String MenuItemsMode[9][3] = {
     // MenuItems[itemID][Language]
     {"LUX", "LUX", "blub"},
-    {"LUX + ZEIT", "LUX + TIME", "blub"},
+    {"LUX+ZEIT", "LUX+TIME", "blub"},
     {"ZEIT", "TIME", "blub"},
     {"MANUELL", "MANUAL", "blub"},
     {"Lichtschwelle", "LUX threshold", "blub"},
@@ -147,9 +179,12 @@ int numberOfMenuItems = MenuItemsSize(MenuItems) - 1;
 int currentMenuItem = 0;
 int previousMenuItem = 1;
 byte button_flag = 0;
+
 unsigned long previousMillis = millis();
 unsigned long lastPress = millis();
 unsigned long blinkZero = millis();
+unsigned long longPressStart = millis();
+byte blinkCount;
 
 int F_init = 0;
 int F_init_flag = 0;
@@ -188,6 +223,8 @@ int8_t minute_o = 0;
 int8_t minute_c = 0;
 int8_t *minute_set;
 
+doorDayAlarm_t *nextAlarm;
+
 Modeset modeset = MODESET_OPENING;
 Setmode timeSetMode = SETNOTHING;
 
@@ -195,6 +232,8 @@ byte day_bitmask = 0b0000000; // SO_MO_DI_MI_DO_FR_SA_
 
 int menu_id = 100;
 int menuActive = 0; // TODO: implement menu active
+bool menuRefreshFlag = true;
+bool longPressFlag = false;
 
 void saveAlarmValues();
 void moveMotor(KLAPPENPOSITION pos);
@@ -215,7 +254,7 @@ void saveTimeSetting();
 
 void timeUpdate()
 {
-  //Serial.println("Getting current time");
+  // Serial.println("Getting current time");
   rtc.updateTime();
 
   Hour = rtc.getHours();
@@ -254,6 +293,13 @@ void makeLocalTime()
 
 void menuFunctions(BTNAction action) // Ihre Menüfunktionen
 {
+
+  // nach aktueller iteration noch ein update um menu zu refreshen
+  if (action != NOTHING)
+  {
+    menuRefreshFlag = true;
+  }
+
   lcd.clear();
   // // Serial.print("Days Open: ");
   // // Serial.println(days_o);
@@ -267,6 +313,10 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
   if (menu_id == 000)
   {
     // // Serial.println("Hauptmenü");
+    lcd.createChar(TIME_SYM, time_sym);
+    lcd.createChar(LUX_SYM, lux_sym);
+    lcd.createChar(ARROW_DOWN, arrowDown);
+    lcd.createChar(ARROW_UP, arrowUp);
 
     timeUpdate();
     dateUpdate();
@@ -282,8 +332,7 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       break;
 
     case SELECT:
-      showNextOpen = !showNextOpen;
-      menu_id = 000; // Startscreen
+      menu_id = 100;
       break;
 
     case EXIT:
@@ -310,9 +359,9 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     lcd.setCursor(3, 0);
     lcd.printf("%02d", Minute);
     lcd.setCursor(5, 0);
-    lcd.print("  ");
-    lcd.setCursor(7, 0);
-    lcd.print(MenuItemsDays[4 + DoW][lang]);
+    lcd.print("   ");
+    lcd.setCursor(8, 0);
+    lcd.print(MenuItemsDays[DoW - 1][lang]);
     lcd.setCursor(11, 0);
     lcd.printf("%02d", Date);
     lcd.setCursor(13, 0);
@@ -321,111 +370,96 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     lcd.printf("%02d", Month);
 
     // Serial.println("HERE");
-
+    /*
+        lcd.setCursor(0, 1);
+        lcd.print(MenuItemsSpecial[1][lang]);
+        lcd.setCursor(4, 1);
+        lcd.print(": ");
+        lcd.setCursor(6, 1);
+    */
     lcd.setCursor(0, 1);
-    lcd.print(MenuItemsSpecial[1][lang]);
-    lcd.setCursor(4, 1);
-    lcd.print(": ");
-    lcd.setCursor(6, 1);
-
-    if (doorPosition == POS_UP)
+    if (blinkCount / blinkFactor == 0)
     {
-
-      lcd.setCursor(7, 1);
-      for (int i = DoW - 1; i < 7 + DoW - 1; i++)
+      lcd.print(MenuItemsSpecial[2][lang]);
+    }
+    else if (blinkCount / blinkFactor == 1)
+    {
+      lcd.print(MenuItemsSpecial[1][lang]);
+    }
+    else
+    {
+      lcd.setCursor(1, 1);
+      lcd.print(MenuItemsDays[blinkCount / blinkFactor - 2][lang]);
+      lcd.setCursor(4, 1);
+      nextAlarm = &openingAlarms[blinkCount / blinkFactor - 2];
+      if (blinkCount % blinkFactor < blinkFactor / 2)
       {
-
-        if (closingAlarms[i % 7].mode == NICHT)
+        if (blink)
         {
-        }
-        else if (closingAlarms[i % 7].mode == LICHT)
-        {
-          if (blink)
-          {
-            lcd.print("\x76");
-          }
-          else
-          {
-            lcd.print("o        ");
-          }
-          break;
+          lcd.write(byte(ARROW_UP));
         }
         else
         {
-          if (closingAlarms[i % 7].mode == LICHT_ZEIT)
-          {
-            if (blink)
-            {
-              lcd.print("\x76");
-            }
-            else
-            {
-              lcd.write(byte(o_INV));
-            }
-          }
-          else
-          {
-            if (blink)
-            {
-              lcd.print("\x76");
-            }
-            else
-            {
-              lcd.print("\x2A");
-            }
-          }
-          if (i == DoW)
-          {
-            if ((closingAlarms[i % 7].hour * 60 + closingAlarms[i % 7].minute) > (hour(t_now) * 60 + minute(t_now) + 1)) // Alarm noch nicht vergangen
-            { 
-              
-              lcd.print(MenuItemsDays[5 + (i % 7)][lang]);
-              lcd.setCursor(11, 0);
-              lcd.printf("%02d", closingAlarms[i % 7].hour);
-              lcd.setCursor(13, 0);
-
-              lcd.print(":");
-
-              lcd.setCursor(14, 0);
-              lcd.printf("%02d", closingAlarms[i % 7].minute);
-              break;
-            }
-          }
-          else
-          {
-            lcd.print(MenuItemsDays[5 + (i % 7)][lang]);
-            lcd.setCursor(11, 0);
-            lcd.printf("%02d", closingAlarms[i % 7].hour);
-            lcd.setCursor(13, 0);
-
-            lcd.print(":");
-
-            lcd.setCursor(14, 0);
-            lcd.printf("%02d", closingAlarms[i % 7].minute);
-            break;
-          }
+          lcd.write(" ");
         }
+
+        
+      }
+      else
+      {
+        if (blink)
+        {
+          lcd.write(byte(ARROW_DOWN));
+        }
+        else
+        {
+          lcd.write(" ");
+        }
+        nextAlarm = &closingAlarms[blinkCount / blinkFactor - 1];
+      }
+
+      lcd.setCursor(7, 1);
+      switch ((*nextAlarm).mode)
+      {
+      case LICHT:
+        lcd.write(byte(LUX_SYM));
+        lcd.setCursor(8, 1);
+        lcd.printf("%01d", (*nextAlarm).lux);
+        break;
+
+      case LICHT_ZEIT:
+        lcd.write(byte(TIME_SYM));
+        lcd.setCursor(8, 1);
+        lcd.printf("%02d", (*nextAlarm).hour);
+        lcd.setCursor(10, 1);
+        lcd.print(":");
+        lcd.setCursor(11, 1);
+        lcd.printf("%02d", (*nextAlarm).minute);
+        lcd.setCursor(14, 1);
+        lcd.write(byte(LUX_SYM));
+        lcd.setCursor(15, 1);
+        lcd.print((*nextAlarm).lux);
+        break;
+
+      case ZEIT:
+        lcd.write(byte(TIME_SYM));
+        lcd.setCursor(8, 1);
+        lcd.printf("%02d", (*nextAlarm).hour);
+        lcd.setCursor(10, 1);
+        lcd.print(":");
+        lcd.setCursor(11, 1);
+        lcd.printf("%02d", (*nextAlarm).minute);
+        break;
+
+      case NICHT:
+        lcd.print("\x2F"
+                  "MANUAL");
+        break;
+
+      default:
+        break;
       }
     }
-
-    // lcd.setCursor(0, 1);
-    // switch (days_o){
-    //     case WEEK:
-    //     lcd.printf("  %s", MenuItemsDays[0][lang]);
-    //     break;
-
-    //     case WEEKEND:
-    //     lcd.printf("  %s", MenuItemsDays[1][lang]);
-    //     break;
-
-    //     case DAILY:
-    //     lcd.printf("  %s", MenuItemsDays[2][lang]);
-    //     break;
-
-    //     default:
-    //     break;
-    // }
-
     lcd.noCursor();
     lcd.noBlink();
     action = NOTHING;
@@ -493,110 +527,27 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     action = NOTHING;
   }
 
-  //====================== Tagesmodus auswählen (inactive)====
-  else if (menu_id == 999)
-  {
-    if (modeset == MODESET_CLOSING)
-    {
-      days = &days_c;
-      // Serial.println("Schließmodus set");
-    }
-    else
-    {
-      days = &days_o;
-      // Serial.println("Öffnungsmodus set");
-    }
-
-    switch (action)
-    {
-    case LEFT:
-      (*days)--;
-      if ((*days) < 0)
-      {
-        (*days) = 2;
-      }
-      break;
-
-    case RIGHT:
-      (*days)++;
-      if ((*days) > 2)
-      {
-        (*days) = 0;
-      }
-      break;
-
-    case SELECT:
-      switch ((*days))
-      {
-      case WEEK:
-        menu_id = 800;
-        break;
-
-      case WEEKEND:
-        menu_id = 111;
-        break;
-
-      case DAILY:
-        menu_id = 112;
-        break;
-
-      default:
-        // TODO: Default case
-        break;
-      }
-      break;
-
-    case EXIT:
-      menu_id = 100; // Hauptmenu
-      break;
-
-    default:
-      menu_id = 110;
-      break;
-    }
-
-    lcd.setCursor(0, 0);
-    lcd.print(">  ");
-    lcd.setCursor(2, 0);
-    if (modeset == MODESET_CLOSING)
-    {
-      lcd.print(MenuItems[1][lang]);
-    }
-    else
-    {
-      lcd.print(MenuItems[0][lang]);
-    }
-
-    lcd.setCursor(0, 1);
-    lcd.print("< ");
-    lcd.setCursor(15, 1);
-    lcd.print(">");
-    lcd.setCursor(2, 1);
-    switch ((*days))
-    {
-    case WEEK:
-      lcd.print(MenuItemsDays[0][lang]);
-      break;
-
-    case WEEKEND:
-      lcd.print(MenuItemsDays[1][lang]);
-      break;
-
-    case DAILY:
-      lcd.print(MenuItemsDays[2][lang]);
-      break;
-
-    default:
-      break;
-    }
-    lcd.setCursor(2, 1);
-    lcd.cursor();
-    action = NOTHING;
-  }
-
   //====================== Tage auswählen ====================
   else if (menu_id == 110)
   {
+    switch (lang)
+    {
+    case DEUTSCH:
+      lcd.createChar(M_INV, M_inv);
+      lcd.createChar(o_INV, o_inv);
+      lcd.createChar(D_INV, D_inv);
+      lcd.createChar(i_INV, i_inv);
+      lcd.createChar(F_INV, F_inv);
+      lcd.createChar(r_INV, r_inv);
+      lcd.createChar(S_INV, S_inv);
+      lcd.createChar(a_INV, a_inv);
+      break;
+
+    default:
+      break;
+    }
+    // TODO: Multilanguage characters
+
     if (modeset == MODESET_CLOSING)
     {
       // Serial.println("Schließtage set");
@@ -609,10 +560,14 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     switch (action)
     {
     case LEFT:
-      (cursor_tag)--;
-      if ((cursor_tag) < 0)
+
+      if ((cursor_tag) == 0)
       {
         (cursor_tag) = 7;
+      }
+      else
+      {
+        (cursor_tag)--;
       }
       break;
 
@@ -666,92 +621,93 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     if ((day_bitmask & MONDAY) > 0)
     {
       lcd.setCursor(2, 1);
-      lcd.write(byte(M_INV));
+      lcd.write(MenuItemsDaysInv[1][lang][0]);
       lcd.setCursor(3, 1);
-      lcd.write(byte(o_INV));
+      lcd.write(MenuItemsDaysInv[1][lang][1]);
     }
     else
     {
       lcd.setCursor(2, 1);
-      lcd.print("Mo");
+      lcd.print(MenuItemsDays[1][lang]);
     }
 
     if ((day_bitmask & TUESDAY) > 0)
     {
       lcd.setCursor(4, 1);
-      lcd.write(byte(D_INV));
-      lcd.setCursor(4, 1);
-      lcd.write(byte(i_INV));
+      lcd.write(MenuItemsDaysInv[2][lang][0]);
+      lcd.setCursor(5, 1);
+      lcd.write(MenuItemsDaysInv[2][lang][1]);
     }
     else
     {
       lcd.setCursor(4, 1);
-      lcd.print("Di");
+      lcd.print(MenuItemsDays[2][lang]);
     }
 
     if ((day_bitmask & WEDNESDAY) > 0)
     {
       lcd.setCursor(6, 1);
-      lcd.write(byte(M_INV));
+      lcd.write(MenuItemsDaysInv[3][lang][0]);
       lcd.setCursor(7, 1);
-      lcd.write(byte(i_INV));
+      lcd.write(MenuItemsDaysInv[3][lang][1]);
     }
     else
     {
       lcd.setCursor(6, 1);
-      lcd.print("Mi");
+      lcd.print(MenuItemsDays[3][lang]);
     }
 
     if ((day_bitmask & THURSDAY) > 0)
     {
       lcd.setCursor(8, 1);
-      lcd.write(byte(D_INV));
+      lcd.write(MenuItemsDaysInv[4][lang][0]);
       lcd.setCursor(9, 1);
-      lcd.write(byte(o_INV));
+      lcd.write(MenuItemsDaysInv[4][lang][1]);
     }
     else
     {
       lcd.setCursor(8, 1);
-      lcd.print("Do");
+      lcd.print(MenuItemsDays[4][lang]);
     }
 
     if ((day_bitmask & FRIDAY) > 0)
     {
       lcd.setCursor(10, 1);
-      lcd.write(byte(F_INV));
+      lcd.write(MenuItemsDaysInv[5][lang][0]);
       lcd.setCursor(11, 1);
-      lcd.write(byte(r_INV));
+      lcd.write(MenuItemsDaysInv[5][lang][1]);
     }
     else
     {
       lcd.setCursor(10, 1);
-      lcd.print("Fr");
+      lcd.print(MenuItemsDays[5][lang]);
     }
 
     if ((day_bitmask & SATURDAY) > 0)
     {
       lcd.setCursor(12, 1);
-      lcd.write(byte(S_INV));
+      lcd.write(MenuItemsDaysInv[6][lang][0]);
       lcd.setCursor(13, 1);
-      lcd.write(byte(a_INV));
+      lcd.write(MenuItemsDaysInv[6][lang][1]);
     }
     else
     {
       lcd.setCursor(12, 1);
-      lcd.print("Sa");
+      lcd.print(MenuItemsDays[6][lang]);
+      ;
     }
 
     if ((day_bitmask & SUNDAY) > 0)
     {
       lcd.setCursor(0, 1);
-      lcd.write(byte(S_INV));
+      lcd.write(MenuItemsDaysInv[0][lang][0]);
       lcd.setCursor(1, 1);
-      lcd.write(byte(o_INV));
+      lcd.write(MenuItemsDaysInv[0][lang][1]);
     }
     else
     {
       lcd.setCursor(0, 1);
-      lcd.print("So");
+      lcd.print(MenuItemsDays[0][lang]);
     }
 
     lcd.setCursor(15, 1);
@@ -834,59 +790,6 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
   // ================= Uhrzeit: =====================
   // ================================================
 
-  else if (menu_id == 998)
-  {
-    // Serial.println("Uhrzeit");
-
-    switch (action)
-    {
-    case LEFT:
-      menu_id = 200;
-      break;
-
-    case RIGHT:
-      menu_id = 400;
-      break;
-
-    case SELECT:
-      menu_id = 310; // Uhrzeit untermenu
-      timeSetMode = SETHOUR;
-      break;
-
-    case EXIT:
-      menu_id = 000; // Startscreen
-      break;
-
-    default:
-      menu_id = 300;
-      break;
-    }
-
-    lcd.setCursor(0, 0);
-    lcd.print("3. ");
-    lcd.setCursor(2, 0);
-    lcd.print(MenuItems[2][lang]);
-
-    lcd.setCursor(0, 1);
-    lcd.printf("%02d", Hour);
-    lcd.setCursor(2, 1);
-    if (blink)
-    {
-      lcd.print(":");
-    }
-    else
-    {
-      lcd.print(" ");
-    }
-
-    lcd.setCursor(3, 1);
-    lcd.printf("%02d", Minute);
-
-    lcd.noCursor();
-
-    action = NOTHING;
-  }
-
   else if (menu_id == 300)
   {
     // Serial.println("Uhrzeit set");
@@ -904,19 +807,27 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     case LEFT:
       if (timeSetMode == SETMINUTE)
       {
-        Minute--;
-        if (Minute < 0)
+
+        if (Minute == 0)
         {
           Minute = 59;
+        }
+        else
+        {
+          Minute--;
         }
         menu_id = 300;
       }
       else if (timeSetMode == SETHOUR)
       {
-        Hour--;
-        if (Hour < 0)
+
+        if (Hour == 0)
         {
           Hour = 23;
+        }
+        else
+        {
+          Hour--;
         }
         menu_id = 300;
       }
@@ -1384,6 +1295,9 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
   // ================================================
   else if (menu_id == 800)
   {
+    lcd.createChar(TIME_SYM, time_sym);
+    lcd.createChar(LUX_SYM, lux_sym);
+
     if (modeset == MODESET_CLOSING)
     {
       mode = &mode_c;
@@ -1398,18 +1312,26 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     switch (action)
     {
     case LEFT:
-      (*mode)--;
-      if ((*mode) < 0)
+
+      if ((*mode) == 0)
       {
         (*mode) = 3;
+      }
+      else
+      {
+        (*mode)--;
       }
       break;
 
     case RIGHT:
-      (*mode)++;
-      if ((*mode) > 3)
+
+      if ((*mode) == 3)
       {
         (*mode) = 0;
+      }
+      else
+      {
+        (*mode)++;
       }
       break;
 
@@ -1465,23 +1387,35 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     switch ((*mode))
     {
     case LICHT:
+      lcd.write(byte(LUX_SYM));
+      lcd.setCursor(7, 1);
       lcd.print(MenuItemsMode[0][lang]);
       break;
 
     case LICHT_ZEIT:
+      lcd.write(byte(LUX_SYM));
+
+      lcd.setCursor(4, 1);
+
       lcd.print(MenuItemsMode[1][lang]);
+      lcd.setCursor(13, 1);
+      lcd.write(byte(TIME_SYM));
       break;
 
     case ZEIT:
+      lcd.write(byte(TIME_SYM));
+      lcd.setCursor(6, 1);
       lcd.print(MenuItemsMode[2][lang]);
       break;
 
     case NICHT:
+      lcd.print("\x2F");
+      lcd.setCursor(5, 1);
       lcd.print(MenuItemsMode[3][lang]);
       break;
     }
     lcd.setCursor(2, 1);
-    lcd.blink();
+    lcd.noBlink();
     lcd.noCursor();
   }
 
@@ -1595,19 +1529,27 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     case LEFT:
       if (timeSetMode == SETMINUTE)
       {
-        (*minute_set)--;
-        if ((*minute_set) < 0)
+
+        if ((*minute_set) == 0)
         {
           (*minute_set) = 59;
+        }
+        else
+        {
+          (*minute_set)--;
         }
         menu_id = 820;
       }
       else if (timeSetMode == SETHOUR)
       {
-        (*hour_set)--;
-        if ((*hour_set) < 0)
+
+        if ((*hour_set) == 0)
         {
           (*hour_set) = 23;
+        }
+        else
+        {
+          (*hour_set)--;
         }
         menu_id = 820;
       }
@@ -1773,6 +1715,10 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
 
 void menuUpdate()
 {
+
+  //Serial.print("Func: menuUpdate(), menu_id: ");
+  //Serial.println(menu_id);
+
   if (digitalRead(SW_SELECT) == HIGH && button_flag == 0)
   {
     // Serial.println("Select pressed");
@@ -1807,24 +1753,40 @@ void menuUpdate()
   }
   else
   {
-    menuFunctions(NOTHING);
+    if (menuRefreshFlag)
+    {
+      menuRefreshFlag = false;
+      menuFunctions(NOTHING);
+    }
   }
 
-  if (millis() - previousMillis >= 400)
+  // Check if long press flag should be set or reset
+  if (digitalRead(SW_FWD) == HIGH || digitalRead(SW_BACK) == HIGH || digitalRead(SW_EXIT) == HIGH || digitalRead(SW_SELECT) == HIGH)
   {
-    previousMillis = millis();
-    button_flag = 0;
-  }
-
-  // TODO: drücken und halten implementieren
-
-  if (((millis() - blinkZero) / 500) % 2 == 0)
-  {
-    blink = 0;
+    if (!longPressFlag)
+    {
+      longPressStart = millis();
+      longPressFlag = true;
+    }
   }
   else
   {
-    blink = 1;
+    longPressFlag = false;
+  }
+
+  // Check if long press is valdi and short debounce time should be taken
+  if (longPressFlag && (millis() - longPressStart > BUTTON_LONG_PRESS_TIME))
+  {
+    if (millis() - previousMillis >= BUTTON_DEBOUNCE_TIME_FAST)
+    {
+      previousMillis = millis();
+      button_flag = 0;
+    }
+  }
+  else if (millis() - previousMillis >= BUTTON_DEBOUNCE_TIME_NORMAL)
+  {
+    previousMillis = millis();
+    button_flag = 0;
   }
 }
 
@@ -1839,6 +1801,22 @@ void menuUpdate()
 // ================================================================================================
 // ================================================================================================
 // ================================================================================================
+
+/*
+22.12 als nächstes zu tun:
+- Wakeup pfade untersuchen
+  - timer wakeup alle pfade ok
+  - statusabfrage immer ok
+
+  - alarm während betrieb
+  - timer während betrieb
+- testing beginnen
+  - aufwachen direkt nach einschlafen untersuchen
+  - sleep timer testen
+
+
+
+*/
 
 void saveTimeSetting()
 {
@@ -2227,7 +2205,7 @@ void statusabfrage()
   Serial.println(up);
   Serial.print("Func: statusabfrage(), Status lower: ");
   Serial.println(low);
-  
+
   if (!up && !low)
   {
     doorPosition = POS_DOWN;
@@ -2305,7 +2283,8 @@ void moveMotor(KLAPPENPOSITION pos)
   { // Klappe fährt grade  oder
     doorPosition = POS_DRIVING;
   }
-  while (doorPosition != pos){
+  while (doorPosition != pos)
+  {
     pinMode(END_LOW, INPUT_PULLUP);
     pinMode(END_UP, INPUT_PULLUP);
 
@@ -2330,7 +2309,7 @@ void moveMotor(KLAPPENPOSITION pos)
     { // Klappe hängt fest
       Serial.println("Klappe steck fest, Motor fährt weiter...");
       doorPosition = POS_BLOCKED;
-      //timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); // TODO: Implement Blocked Timer
+      // timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); // TODO: Implement Blocked Timer
     }
     else if (up && low)
     {
@@ -2344,7 +2323,7 @@ void moveMotor(KLAPPENPOSITION pos)
     { // Klappe fährt grade  oder
       Serial.println("Klappe fährt grade, Motor fährt weiter...");
       doorPosition = POS_DRIVING;
-      //timerMoving = timerBegin(MOVING_TIMER, t_err_open, true); // TODO: Implement Moving Timer
+      // timerMoving = timerBegin(MOVING_TIMER, t_err_open, true); // TODO: Implement Moving Timer
     }
   }
   digitalWrite(M_FWD, LOW);
@@ -2695,23 +2674,11 @@ void setup()
 
   delay(5);
 
-  
   Serial.begin(115200);
   lcd.begin(16, 2);
   Wire.setPins(I2C_SDA, I2C_SCL);
   Wire.begin();
   memory.begin("storage", false);
-
-  
-
-  lcd.createChar(M_INV, M_inv);
-  lcd.createChar(o_INV, o_inv);
-  lcd.createChar(D_INV, D_inv);
-  lcd.createChar(i_INV, i_inv);
-  lcd.createChar(F_INV, F_inv);
-  lcd.createChar(r_INV, r_inv);
-  lcd.createChar(S_INV, S_inv);
-  lcd.createChar(a_INV, a_inv);
 
   if (rtc.begin() == false)
   {
@@ -2725,7 +2692,6 @@ void setup()
   dateUpdate();
 
   wakeupHandling();
-  
 
   // ========= Der folgende Teil wird nur erreicht, wenn die Wakeup-Quelle kein Knopf war =========
   LCD_ON;
@@ -2739,7 +2705,7 @@ void setup()
   statusabfrage(); // TODO: testen ob alles korrekt geladen wird und klappe nicht ausgeht.
 
   blinkZero = millis();
-  menu_id = 100;
+  menu_id = 000;
 }
 
 void loop()
@@ -2753,6 +2719,7 @@ void loop()
   }
   else
   {
+    // Check ob menu zu lange inaktiv ist --> schlafen
     if (millis() - lastPress >= LCD_OFF_TIME)
     {
       pinMode(LCD_BL_EN, INPUT);
@@ -2767,8 +2734,32 @@ void loop()
       menuActive = 0;
       statusabfrage();
     }
+
+    // Check ob menü refresh nötig ist
+    if (((millis() - blinkZero) / 500) % 2 == 0)
+    {
+      if (blink == 1 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810)))
+      {
+        menuRefreshFlag = true;
+        blinkCount += 1;
+        if (blinkCount > blinkFactor * 9 - 1)
+        {
+          blinkCount = 0;
+        }
+      }
+      blink = 0;
+    }
+    else
+    {
+      if (blink == 0 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810)))
+      {
+        menuRefreshFlag = true;
+      }
+      blink = 1;
+    }
+
     menuUpdate();
-    delay(50);
+    // delay(50);
   }
 
   //// Serial.print("menuId ");
