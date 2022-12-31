@@ -14,6 +14,7 @@ const char *keyCloseAlarms = "close_alarm";
 const char *keyLDRFlag = "LDR_flag";
 const char *keyAlarmFlag = "alarm_flag";
 const char *keyLastMove = "last_move";
+const char *keyLastMovePosition = "last_move_Position";
 
 // uint8_t luxMap[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 uint32_t voltMap[10] = {300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000};
@@ -26,7 +27,8 @@ int8_t Hour;
 int8_t Minute;
 int8_t Second;
 
-KLAPPENPOSITION doorPosition, doorGoal;
+KLAPPENPOSITION doorPosition, doorGoal, lastDoorPosition;
+KLAPPENRICHTUNG doorDirection;
 
 // Alarm Variablen
 bool century = false;
@@ -34,6 +36,7 @@ bool h12Flag;
 bool pmFlag;
 byte alarmDay, alarmHour, alarmMinute, alarmSecond, alarmBits;
 bool alarmDy, alarmH12Flag, alarmPmFlag;
+ERROR_CODE errorFlag;
 
 KLAPPENPOSITION LDRFlag = POS_DOWN; // bei nächstem aufwachen den Sensor nutzen
 // byte errorFlag = 0; //Notalarm, wenn Klappe nicht durch Sensor geöffnet
@@ -50,8 +53,9 @@ int lux_debounce_time = 20;      // Zeit in sekunden zwischen zwei positiven Lic
 int t_delta_min = 600;           // Zeit in Sekunden die zwischen zwei betätigungen per Licht vergangen sein müssen
 int t_sens = 120;                // Zeit in Sekunden, die zwischen zwei Sensorprüfungen vergeht
 
-int t_err_open = 60;  // Maximale Zeit zum Öffnen
-int t_err_close = 60; // Maximale Zeit zum Schließen
+int t_err_open = 180;  // Maximale Zeit zum Öffnen
+int t_err_close = 150; // Maximale Zeit zum Schließen
+int t_err_block = 30;  // Maximale Zeit, welche die Klappe blockieren darf
 
 openingMode nextMode = NICHT;
 KLAPPENPOSITION nextMove = POS_DOWN;
@@ -95,6 +99,24 @@ String MenuItems[8][3] = {
     {"Sprache", "language", "blub"},
     {"Reset", "reset", "blub"},
     {"EXIT", "EXIT", "EXIT"},
+};
+
+String InitItems[3][3] = {
+    // MenuItems[itemID][Language]
+    {"   Willkommen   ",
+     "    Welcome     ", "NOX"},
+    {"Taste dr"
+     "\xF5"
+     "cken  "
+     "\x7F",
+     "Press any key  "
+     "\x7F",
+     "blub"},
+    {"Ersteinstellung"
+     "\x7F",
+     "Initial setup  "
+     "\x7F",
+     "blub"},
 };
 
 String MenuItemsSpecial[3][3] = {
@@ -184,9 +206,13 @@ unsigned long previousMillis = millis();
 unsigned long lastPress = millis();
 unsigned long blinkZero = millis();
 unsigned long longPressStart = millis();
+unsigned long moveZero = millis();
+unsigned long blockZero = millis();
+
 byte blinkCount;
 
-int F_init = 0;
+int F_init_alarm = 0;
+int F_init_NOX = 0;
 int F_init_flag = 0;
 int F_init_last_move = 0;
 
@@ -378,20 +404,20 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
         lcd.setCursor(6, 1);
     */
     lcd.setCursor(0, 1);
-    if (blinkCount / blinkFactor == 0)
+    if (blinkCount / (blinkFactor / 2) == 0)
     {
       lcd.print(MenuItemsSpecial[2][lang]);
     }
-    else if (blinkCount / blinkFactor == 1)
+    else if (blinkCount / (blinkFactor / 2) == 1)
     {
       lcd.print(MenuItemsSpecial[1][lang]);
     }
     else
     {
       lcd.setCursor(1, 1);
-      lcd.print(MenuItemsDays[blinkCount / blinkFactor - 2][lang]);
+      lcd.print(MenuItemsDays[blinkCount / blinkFactor - 1][lang]);
       lcd.setCursor(4, 1);
-      nextAlarm = &openingAlarms[blinkCount / blinkFactor - 2];
+
       if (blinkCount % blinkFactor < blinkFactor / 2)
       {
         if (blink)
@@ -403,7 +429,7 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
           lcd.write(" ");
         }
 
-        
+        nextAlarm = &openingAlarms[blinkCount / blinkFactor - 1];
       }
       else
       {
@@ -468,10 +494,57 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
   // TODO: Statusmeldung implementieren (Montag - Sonntag)
 
   // ================================================
+  // ================ INIT-MENU: ====================
+  // ================================================
+
+  else if (menu_id == 001)
+  {
+    // // Serial.println("INIT-MENU");
+
+    switch (action)
+    {
+    case LEFT:
+      menu_id = 300;
+      break;
+
+    case RIGHT:
+      menu_id = 300;
+      break;
+
+    case SELECT:
+      menu_id = 300;
+      break;
+
+    case EXIT:
+      menu_id = 300;
+      break;
+
+    default:
+      menu_id = 001;
+      break;
+    }
+
+    lcd.setCursor(0, 0);
+    lcd.print(InitItems[0][lang]);
+    lcd.setCursor(0, 1);
+    if (blinkCount % 8 < 4)
+    {
+      lcd.print(InitItems[1][lang]);
+    }
+    else
+    {
+      lcd.print(InitItems[2][lang]);
+    }
+    lcd.setCursor(15,1);
+    lcd.blink();
+    lcd.noCursor();
+  }
+
+  // ================================================
   // ============== Öffnungsmodus: ==================
   // ================================================
 
-  if (menu_id == 100)
+  else if (menu_id == 100)
   {
     // Serial.println("Öffnungsmodus");
 
@@ -1716,8 +1789,8 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
 void menuUpdate()
 {
 
-  //Serial.print("Func: menuUpdate(), menu_id: ");
-  //Serial.println(menu_id);
+  // Serial.print("Func: menuUpdate(), menu_id: ");
+  // Serial.println(menu_id);
 
   if (digitalRead(SW_SELECT) == HIGH && button_flag == 0)
   {
@@ -2241,11 +2314,24 @@ void statusabfrage()
     break;
 
   case POS_BLOCKED:
-    // TODO: implement error handling here or skip position
+    errorFlag = TIMER_BLOCKED_ELAPSED; // TODO: ErrorHandling
     break;
 
   case POS_DRIVING:
-    // TODO: do nothing or wait?
+    // Klappe ist irgendwo zwischen oben und unten --> irgendetwas ist passiert seit der letzten Bewegung.
+    // In diesem Fall wird die letzte bekannte position abgefragt und das Gegenteil gemacht.
+    if (lastDoorPosition == POS_DOWN)
+    {
+      setNextOpeningAlarm();
+    }
+    else if (lastDoorPosition == POS_UP)
+    {
+      setNextClosingAlarm(); // TODO: Diskutieren, ob standardmäßiges Schließen genug ist
+    }
+    else
+    {
+      errorFlag = TIMER_BLOCKED_ELAPSED; // TODO: ErrorHandling
+    }
     break;
   }
 }
@@ -2253,12 +2339,19 @@ void statusabfrage()
 void moveMotor(KLAPPENPOSITION pos)
 {
   Serial.print("Func: moveMotor() Ziel: ");
-  Serial.println(pos);
-  digitalWrite(LED, HIGH); // TODO: remove LED
+  if (pos == POS_DOWN)
+  {
+    Serial.println("Klappe runter");
+  }
+  else
+  {
+    Serial.println("Klappe hoch");
+  }
+
   pinMode(END_LOW, INPUT_PULLUP);
   pinMode(END_UP, INPUT_PULLUP);
 
-  delay(5);
+  delay(5); // Input Pins müssen gepullupt werden
 
   byte up = digitalRead(END_UP);
   byte low = digitalRead(END_LOW);
@@ -2267,22 +2360,29 @@ void moveMotor(KLAPPENPOSITION pos)
   Serial.print("Func: moveMotor(), Status lower: ");
   Serial.println(low);
 
+  doorDirection = STANDING;
+
   if (!up && !low)
   {
     doorPosition = POS_DOWN;
+    Serial.println("Func: moveMotor(), Klappe unten ");
   }
   else if (!up && low)
   { // Klappe hängt fest
     doorPosition = POS_BLOCKED;
+    Serial.println("Func: moveMotor(), Klappe hängt ");
   }
   else if (up && low)
   {
     doorPosition = POS_UP;
+    Serial.println("Func: moveMotor(), Klappe oben ");
   }
   else if (up && !low)
   { // Klappe fährt grade  oder
     doorPosition = POS_DRIVING;
+    Serial.println("Func: moveMotor(), Klappe zwischen oben und unten ");
   }
+
   while (doorPosition != pos)
   {
     pinMode(END_LOW, INPUT_PULLUP);
@@ -2292,46 +2392,144 @@ void moveMotor(KLAPPENPOSITION pos)
 
     byte up = digitalRead(END_UP);
     byte low = digitalRead(END_LOW);
-    Serial.print("Func: moveMotor(), Status upper: ");
-    Serial.println(up);
-    Serial.print("Func: moveMotor(), Status lower: ");
-    Serial.println(low);
+    // Serial.print("Func: moveMotor(), Status upper: ");
+    // Serial.println(up);
+    // Serial.print("Func: moveMotor(), Status lower: ");
+    // Serial.println(low);
+
     if (!up && !low)
     {
-      Serial.println("Klappe unten, Motor fährt hoch...");
+      Serial.println("Func: moveMotor(), Klappe ist unten, fährt hoch ");
       doorPosition = POS_DOWN;
+      if (doorDirection != MOVING_UP)
+      {
+        doorDirection = MOVING_UP;
+        moveZero = millis();
+      }
       digitalWrite(M_FWD, HIGH);
       digitalWrite(M_BACK, LOW);
       // Klappe ist unten oder
       // Klappe ist zu leicht
     }
+
     else if (!up && low)
     { // Klappe hängt fest
-      Serial.println("Klappe steck fest, Motor fährt weiter...");
-      doorPosition = POS_BLOCKED;
+      Serial.println("Klappe steckt fest, Motor fährt weiter...");
+      if (doorDirection == STANDING)
+      {
+        if (pos == POS_DOWN)
+        {
+          moveZero = millis();
+          doorDirection = MOVING_DOWN;
+          digitalWrite(M_FWD, LOW);
+          digitalWrite(M_BACK, HIGH);
+        }
+        else
+        {
+          moveZero = millis();
+          doorDirection = MOVING_UP;
+          digitalWrite(M_FWD, HIGH);
+          digitalWrite(M_BACK, LOW);
+        }
+      }
+
+      if (doorPosition != POS_BLOCKED)
+      {
+        doorPosition = POS_BLOCKED;
+        blockZero = millis();
+      }
       // timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); // TODO: Implement Blocked Timer
     }
+
     else if (up && low)
     {
       Serial.println("Klappe oben, Motor fährt runter...");
       doorPosition = POS_UP;
+      if (doorDirection != MOVING_DOWN)
+      {
+        doorDirection = MOVING_DOWN;
+        moveZero = millis();
+      }
       digitalWrite(M_FWD, LOW);
       digitalWrite(M_BACK, HIGH);
       // Klappe ist oben
     }
+
     else if (up && !low)
-    { // Klappe fährt grade  oder
-      Serial.println("Klappe fährt grade, Motor fährt weiter...");
+    { // Klappe fährt grade
       doorPosition = POS_DRIVING;
+
+      if (doorDirection == MOVING_DOWN)
+      {
+        Serial.println("Klappe fährt grade herunter, Motor fährt weiter...");
+      }
+      else if (doorDirection == MOVING_UP)
+      {
+        Serial.println("Klappe fährt grade hoch, Motor fährt weiter...");
+      }
+
+      if (doorDirection == STANDING)
+      {
+        if (pos == POS_DOWN)
+        {
+          moveZero = millis();
+          doorDirection = MOVING_DOWN;
+          digitalWrite(M_FWD, LOW);
+          digitalWrite(M_BACK, HIGH);
+        }
+        else
+        {
+          moveZero = millis();
+          doorDirection = MOVING_UP;
+          digitalWrite(M_FWD, HIGH);
+          digitalWrite(M_BACK, LOW);
+        }
+      }
       // timerMoving = timerBegin(MOVING_TIMER, t_err_open, true); // TODO: Implement Moving Timer
     }
+
+    //======================TIMER CHECKS========================
+
+    if (doorPosition == POS_BLOCKED)
+    {
+      // Klappe ist blockiert
+      if (millis() - blockZero > (t_err_block * 1000))
+      {
+        digitalWrite(LED, HIGH); // TODO: ERROR HANDLING
+        errorFlag = TIMER_BLOCKED_ELAPSED;
+        break;
+      }
+    }
+
+    if (doorDirection == MOVING_DOWN && (millis() - moveZero > (t_err_close * 1000)))
+    {
+      // Klappe fährt zu lange runter
+      digitalWrite(LED, HIGH);
+      doorPosition = POS_BLOCKED;
+      errorFlag = TIMER_CLOSE_ELAPSED;
+      break;
+    }
+
+    if (doorDirection == MOVING_UP && (millis() - moveZero > (t_err_close * 1000)))
+    {
+      digitalWrite(LED, HIGH);
+      doorPosition = POS_BLOCKED;
+      // Klappe fährt zu lange hoch
+      errorFlag = TIMER_OPEN_ELAPSED;
+      break;
+    }
+
+    //=====================END WHILE================
   }
   digitalWrite(M_FWD, LOW);
   digitalWrite(M_BACK, LOW);
-  digitalWrite(LED, LOW); // TODO: remove LED
+  doorDirection = STANDING;
 
   lastMove = t_now;
+  lastDoorPosition = doorPosition;
   memory.putBytes(keyLastMove, &lastMove, sizeof(time_t));
+  memory.putBytes(keyLastMovePosition, &doorPosition, sizeof(KLAPPENPOSITION));
+
   if (F_init_last_move == 0)
   {
     memory.putInt("init_last_move", 1); // erste bewegung hat stattgefunden
@@ -2385,8 +2583,8 @@ void saveAlarmValues()
 
   memory.putBytes(keyOpenAlarms, openingAlarms, sizeof(doorDayAlarm_t[7]));
   memory.putBytes(keyCloseAlarms, closingAlarms, sizeof(doorDayAlarm_t[7]));
+  memory.putInt("init_alarm", 1);
   Serial.println("SAVED");
-  memory.putInt("init", 1);
 }
 
 void writeValuesToFlash()
@@ -2410,7 +2608,7 @@ void setAlarmsDefault()
 
   buf_o.delay = 0;
   buf_o.done = 0;
-  buf_o.hour = 12;
+  buf_o.hour = 9;
   buf_o.minute = 30;
   buf_o.mode = NICHT;
   buf_o.lux = 0;
@@ -2458,14 +2656,18 @@ void readValuesFromFlash()
   {
     // keine Bewegung bisher
     lastMove = 0;
+    lastDoorPosition = POS_BLOCKED;
   }
   else
   { // Letzte Bewegung aus Speicher lesen
     memory.getBytes(keyLastMove, &lastMove, sizeof(time_t));
+    memory.getBytes(keyLastMovePosition, &lastDoorPosition, sizeof(KLAPPENPOSITION));
   }
 
-  F_init = memory.getInt("init", 0);
-  if (F_init == 0)
+  F_init_NOX = memory.getInt("init_NOX", 0);
+
+  F_init_alarm = memory.getInt("init_alarm", 0);
+  if (F_init_alarm == 0)
   {
     // set Alarms to default
     setAlarmsDefault();
@@ -2479,11 +2681,12 @@ void readValuesFromFlash()
 
     memory.getBytes(keyOpenAlarms, openingAlarms, 7 * sizeof(doorDayAlarm_t));
     memory.getBytes(keyCloseAlarms, closingAlarms, 7 * sizeof(doorDayAlarm_t));
-    Serial.println("Alarms read --> printing opening Alarms");
   }
 
   for (int i = 0; i < 7; i++)
   {
+    Serial.println("Func: readValuesFromFlash(), Printing Alarms:\n\n");
+    Serial.println("Alarms read --> printing opening Alarms");
     Serial.print("Minute on day");
     Serial.print(i);
     Serial.print(": ");
@@ -2525,7 +2728,9 @@ void alarmWakeupHandling()
     break;
 
   default:
-    // TODO: error handling
+    Serial.println("Func: alarmWakeupHandling(): ERROR: wrong alarmFlag");
+    digitalWrite(LED, HIGH);
+    statusabfrage();
     break;
   }
 }
@@ -2701,17 +2906,24 @@ void setup()
   lcd.setCursor(6, 0);
   lcd.print("NOX");
   delay(100);
+  if (F_init_NOX == 0)
+  {
+    menu_id = 001; // TODO: richtige weiterleitung ins init menu gewährleisten
+  }
+  else
+  {  
+    statusabfrage(); // TODO: testen ob alles korrekt geladen wird und klappe nicht ausgeht.
+    menu_id = 000;
+  }
 
-  statusabfrage(); // TODO: testen ob alles korrekt geladen wird und klappe nicht ausgeht.
 
   blinkZero = millis();
-  menu_id = 000;
 }
 
 void loop()
 {
   if (digitalRead(CLK_INT) == 1)
-  { // Alarm ist während der Menülaufzeit gekommen
+  { // Alarm ist während der Menülaufzeit gekommen //TODO: Was wenn alarm auf 00:01 gestellt wurde? --> verhindern oder Fehlerreaktion (immer auf 00:02 aufrunden zb)
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print(MenuItemsSpecial[1][lang]); // Klappe ist beschäftigt, menu wird unterbrochen
@@ -2738,11 +2950,11 @@ void loop()
     // Check ob menü refresh nötig ist
     if (((millis() - blinkZero) / 500) % 2 == 0)
     {
-      if (blink == 1 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810)))
+      if (blink == 1 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810) || (menu_id == 001)))
       {
         menuRefreshFlag = true;
         blinkCount += 1;
-        if (blinkCount > blinkFactor * 9 - 1)
+        if (blinkCount > blinkFactor * 8 - 1)
         {
           blinkCount = 0;
         }
@@ -2751,7 +2963,7 @@ void loop()
     }
     else
     {
-      if (blink == 0 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810)))
+      if (blink == 0 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810) || (menu_id == 001)))
       {
         menuRefreshFlag = true;
       }

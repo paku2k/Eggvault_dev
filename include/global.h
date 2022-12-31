@@ -90,6 +90,7 @@ void makeLocalTime();
 
 #define LCD_OFF_TIME 100000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
 #define NOX_SLEEP_TIME 200000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
+
 #define BUTTON_DEBOUNCE_TIME_NORMAL 400 //Debounce time für normalen tastendruck
 #define BUTTON_LONG_PRESS_TIME 1500 //Zeit, nachdem ein long button press erkannt wurde
 #define BUTTON_DEBOUNCE_TIME_FAST 200 // Zeit die nach einem long button press für das inkrementieren gebraucht wird
@@ -97,8 +98,11 @@ void makeLocalTime();
 #define MINLUX 0
 #define MAXLUX 9
 
+enum ERROR_CODE {NO_ERROR, TIMER_BLOCKED_ELAPSED, TIMER_OPEN_ELAPSED, TIMER_CLOSE_ELAPSED, UNDEFINED};
+
 
 enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
+enum KLAPPENRICHTUNG{MOVING_DOWN, MOVING_UP, STANDING};
 enum openingMode {LICHT, ZEIT, LICHT_ZEIT, NICHT};
 enum TimerLogic {NEXT_OPEN, NEXT_CLOSE, NO_TIMER};
 enum TimerReturnVal {GO_DOWN, GO_UP, SLEEP_LONG, SLEEP_SHORT};
