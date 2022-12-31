@@ -108,14 +108,14 @@ String InitItems[3][3] = {
     {"Taste dr"
      "\xF5"
      "cken  "
-     "\x7F",
+     "\x7E",
      "Press any key  "
-     "\x7F",
+     "\x7E",
      "blub"},
     {"Ersteinstellung"
-     "\x7F",
+     "\x7E",
      "Initial setup  "
-     "\x7F",
+     "\x7E",
      "blub"},
 };
 
