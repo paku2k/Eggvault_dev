@@ -1268,8 +1268,8 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     lcd.setCursor(2, 0);
     lcd.print(MenuItems[4][lang]);
 
-    lcd.setCursor(0, 1);
-    lcd.printf("SOMMERZEIT TBD");
+    //lcd.setCursor(0, 1);
+    //lcd.printf("SOMMERZEIT TBD");
 
     lcd.noCursor();
 
@@ -1312,8 +1312,8 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     lcd.setCursor(2, 0);
     lcd.print(MenuItems[5][lang]);
 
-    lcd.setCursor(0, 1);
-    lcd.printf("DEUTSCH TBD");
+    //lcd.setCursor(0, 1);
+    //lcd.printf("DEUTSCH TBD");
 
     lcd.noCursor();
   }
@@ -1357,8 +1357,8 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     lcd.setCursor(2, 0);
     lcd.print(MenuItems[6][lang]);
 
-    lcd.setCursor(0, 1);
-    lcd.printf("RESET TBD");
+    //lcd.setCursor(0, 1);
+    //lcd.printf(MenuItems[6][lang]);
 
     lcd.noCursor();
   }
@@ -1778,7 +1778,7 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     saveAlarmValues();
     // TODO: einmaliges speichern
     lcd.setCursor(0, 0);
-    lcd.print(MenuItemsMode[9][lang]);
+    lcd.print(MenuItemsMode[8][lang]);
     lcd.noBlink();
     lcd.noCursor();
 

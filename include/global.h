@@ -54,8 +54,8 @@ void makeLocalTime();
 #define LED 2
 #define LCD_RS 4
 #define LCD_D5 5
-#define END_LOW 12
-#define M_FWD 13
+#define END_LOW 39
+ #define M_FWD 13
 #define M_BACK 14
 #define LCD_BL_EN 15
 #define LCD_E 16
@@ -68,10 +68,10 @@ void makeLocalTime();
 #define LDR_EN 25
 #define END_UP 26
 #define CLK_INT 27
-#define SW_EXIT 34
-#define SW_SELECT 32
-#define SW_BACK 35
-#define SW_FWD 33
+#define SW_EXIT 32
+#define SW_SELECT 33
+#define SW_BACK 34
+#define SW_FWD 35
 #define LDR_VAL 36
 #define V_BATT 39
 
@@ -88,8 +88,8 @@ void makeLocalTime();
 #define BATT_MIN  5.0 //Minimum Volts for Battery
 #define THRESHOLD_COUNT_MAX 2 //How often has the LDR to be over threshold
 
-#define LCD_OFF_TIME 100000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
-#define NOX_SLEEP_TIME 200000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
+#define LCD_OFF_TIME 20000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
+#define NOX_SLEEP_TIME 40000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
 
 #define BUTTON_DEBOUNCE_TIME_NORMAL 400 //Debounce time für normalen tastendruck
 #define BUTTON_LONG_PRESS_TIME 1500 //Zeit, nachdem ein long button press erkannt wurde
