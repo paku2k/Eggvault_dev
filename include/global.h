@@ -54,10 +54,10 @@ void makeLocalTime();
 #define LED 2
 #define LCD_RS 4
 #define LCD_D5 5
-#define END_LOW 39
- #define M_FWD 13
-#define M_BACK 14
-#define LCD_BL_EN 15
+#define END_LOW 39 //12
+#define M_FWD 2 //13
+#define M_BACK 2 //14
+#define LCD_BL_EN 2 // 15
 #define LCD_E 16
 #define LCD_D4 17
 #define LCD_D6 18
@@ -73,7 +73,7 @@ void makeLocalTime();
 #define SW_BACK 34
 #define SW_FWD 35
 #define LDR_VAL 36
-#define V_BATT 39
+#define V_BATT 2 //39
 
 #define WAKEUP_PIN_BITMASK 0xF08000000
 
@@ -88,8 +88,8 @@ void makeLocalTime();
 #define BATT_MIN  5.0 //Minimum Volts for Battery
 #define THRESHOLD_COUNT_MAX 2 //How often has the LDR to be over threshold
 
-#define LCD_OFF_TIME 20000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
-#define NOX_SLEEP_TIME 40000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
+#define LCD_OFF_TIME 2000000 //Zeit bis das LCD dunkel wird nach dem letzten Tastendruck
+#define NOX_SLEEP_TIME 4000000 //Zeit bis die Klappe einschläft nach dem letzten Tastendruck
 
 #define BUTTON_DEBOUNCE_TIME_NORMAL 400 //Debounce time für normalen tastendruck
 #define BUTTON_LONG_PRESS_TIME 1500 //Zeit, nachdem ein long button press erkannt wurde
@@ -98,11 +98,11 @@ void makeLocalTime();
 #define MINLUX 0
 #define MAXLUX 9
 
-enum ERROR_CODE {NO_ERROR, TIMER_BLOCKED_ELAPSED, TIMER_OPEN_ELAPSED, TIMER_CLOSE_ELAPSED, UNDEFINED};
+enum ERROR_CODE {NO_ERROR, TIMER_BLOCKED_ELAPSED, TIMER_OPEN_ELAPSED, TIMER_CLOSE_ELAPSED, WRONG_LDR_FLAG,WRONG_ALARM_FLAG,POS_BLOCKED_CANNOT_BE_SET,UNDEFINED};
 
 
 enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
-enum KLAPPENRICHTUNG{MOVING_DOWN, MOVING_UP, STANDING};
+enum KLAPPENRICHTUNG{MOVING_DOWN, FINISHING_DOWN, MOVING_UP, STANDING};
 enum openingMode {LICHT, ZEIT, LICHT_ZEIT, NICHT};
 enum TimerLogic {NEXT_OPEN, NEXT_CLOSE, NO_TIMER};
 enum TimerReturnVal {GO_DOWN, GO_UP, SLEEP_LONG, SLEEP_SHORT};

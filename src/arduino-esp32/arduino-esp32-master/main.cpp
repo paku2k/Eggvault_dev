@@ -15,6 +15,7 @@ const char *keyLDRFlag = "LDR_flag";
 const char *keyAlarmFlag = "alarm_flag";
 const char *keyLastMove = "last_move";
 const char *keyLastMovePosition = "last_move_Position";
+const char *keyErrorFlag = "key_error_flag";
 
 // uint8_t luxMap[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 uint32_t voltMap[10] = {300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000};
@@ -56,6 +57,7 @@ int t_sens = 120;                // Zeit in Sekunden, die zwischen zwei Sensorpr
 int t_err_open = 180;  // Maximale Zeit zum Öffnen
 int t_err_close = 150; // Maximale Zeit zum Schließen
 int t_err_block = 30;  // Maximale Zeit, welche die Klappe blockieren darf
+int t_down_finish = 2;
 
 openingMode nextMode = NICHT;
 KLAPPENPOSITION nextMove = POS_DOWN;
@@ -104,7 +106,7 @@ String MenuItems[8][3] = {
 String InitItems[3][3] = {
     // MenuItems[itemID][Language]
     {"   Willkommen   ",
-     "    Welcome     ", "NOX"},
+     "    Welcome     ", "blub"},
     {"Taste dr"
      "\xF5"
      "cken  "
@@ -119,7 +121,39 @@ String InitItems[3][3] = {
      "blub"},
 };
 
-String MenuItemsSpecial[3][3] = {
+String ErrorItems[7][3] = {
+    // MenuItems[itemID][Language]
+    {"      ERROR     ",
+     "      ERROR     ", "      ERROR     "},
+    {"Blockiert",
+     "Blocked",
+     "blub"},
+    {"Zeit"
+     "\xF5"
+     "berschritt""\x7E",
+     "opening too long",
+     "blub"},
+     {"Zeit"
+     "\xF5"
+     "berschritt""\x7F",
+     "closing too long",
+     "blub"},
+     {"Interner Fehler",
+     "internal error",
+     "blub"},
+     {"Beliebige Taste",
+     "press any key",
+     "blub"},
+     {"Anleitung pr"
+     "\xF5"
+     "fen",
+     "check manual",
+     "blub"},
+};
+
+
+
+String MenuItemsSpecial[5][3] = {
     // MenuItems[itemID][Language]
     {"Besch"
      "\xE1"
@@ -133,6 +167,10 @@ String MenuItemsSpecial[3][3] = {
      "\xF5"
      "hnerklappe",
      "NOX Chickendoor", "blub"},
+     {"Klappe ""\xEF""ffnet...",
+     "door opening...", "blub"},
+     {"Klappe Schlie""\xE2""t.",
+     "door closing...", "blub"},
 
 };
 
@@ -208,6 +246,7 @@ unsigned long blinkZero = millis();
 unsigned long longPressStart = millis();
 unsigned long moveZero = millis();
 unsigned long blockZero = millis();
+unsigned long downwardsTimer = millis(); 
 
 byte blinkCount;
 
@@ -350,11 +389,11 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     switch (action)
     {
     case LEFT:
-      menu_id = 700;
+      menu_id = 003;
       break;
 
     case RIGHT:
-      menu_id = 100;
+      menu_id = 004;
       break;
 
     case SELECT:
@@ -538,6 +577,110 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     lcd.setCursor(15,1);
     lcd.blink();
     lcd.noCursor();
+  }
+
+  // ================================================
+  // ================ ERROR-MENU: ===================
+  // ================================================
+
+  else if (menu_id == 002)
+  {
+
+    switch (action)
+    {
+    case LEFT:
+      errorFlag = NO_ERROR;
+      memory.putBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
+      menu_id = 000;
+      break;
+
+    case RIGHT:
+      errorFlag = NO_ERROR;
+      memory.putBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
+      menu_id = 000;
+      break;
+
+    case SELECT:
+      errorFlag = NO_ERROR;
+      memory.putBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
+      menu_id = 000;
+      break;
+
+    case EXIT:
+      errorFlag = NO_ERROR;
+      memory.putBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
+      menu_id = 000;
+      break;
+
+    default:
+      menu_id = 000;
+      break;
+    }
+
+    
+
+    lcd.setCursor(0, 0);
+    lcd.print(ErrorItems[0][lang]);
+    lcd.setCursor(0, 1);
+    if (blinkCount % 8 < 4)
+    {
+      digitalWrite(LED, HIGH);
+      switch (errorFlag)
+      {
+      case TIMER_BLOCKED_ELAPSED:
+        lcd.print(ErrorItems[1][lang]);
+        break;
+
+      case TIMER_OPEN_ELAPSED:
+        lcd.print(ErrorItems[2][lang]);
+        break;
+
+      case TIMER_CLOSE_ELAPSED:
+        lcd.print(ErrorItems[3][lang]);
+        break;
+      
+      default:
+        lcd.print(ErrorItems[4][lang]);
+        break;
+      }
+      
+    }
+    else
+    {
+      digitalWrite(LED, LOW);
+      lcd.print(ErrorItems[6][lang]);
+    }
+    lcd.setCursor(15,1);
+    lcd.noBlink();
+    lcd.noCursor();
+
+
+  }
+
+  // ================================================
+  // ============== Manuell öffnen: =================
+  // ================================================
+
+  else if (menu_id == 003)
+  {
+    lcd.setCursor(0,0);
+    lcd.print(MenuItemsSpecial[3][lang]);
+    moveMotor(POS_UP);
+    menu_id = 000;
+  }
+
+  
+  // ================================================
+  // =========== Manuell schließen: =================
+  // ================================================
+
+
+  else if (menu_id == 004)
+  {
+    lcd.setCursor(0,0);
+    lcd.print(MenuItemsSpecial[4][lang]);
+    moveMotor(POS_DOWN);
+    menu_id = 000;
   }
 
   // ================================================
@@ -907,7 +1050,14 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       else
       {
         timeSetMode = SETNOTHING;
-        menu_id = 200;
+        if(F_init_NOX == 0){
+          menu_id = 300;
+        }
+        else
+        {
+          menu_id = 200;
+        }
+        
       }
       break;
 
@@ -933,7 +1083,13 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       else
       {
         timeSetMode = SETNOTHING;
-        menu_id = 400;
+        if(F_init_NOX == 0){
+          menu_id = 300;
+        }
+        else
+        {
+          menu_id = 400;
+        }
       }
       break;
 
@@ -943,28 +1099,41 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
         dateUpdate();
         saveTimeSetting();
         timeSetMode = SETNOTHING;
+        menu_id = 300; //
+        if(F_init_NOX == 0){
+          menu_id = 400;
+        }
+
       }
       else if (timeSetMode == SETNOTHING)
       {
         timeSetMode = SETHOUR;
+        menu_id = 300; //
       }
       else if (timeSetMode == SETHOUR)
       {
         timeSetMode = SETMINUTE;
+        menu_id = 300; //
       }
-      menu_id = 300; //
       break;
 
     case EXIT:
       if (timeSetMode == SETNOTHING)
       {
-        menu_id = 000; // Hauptmenu
+        if(F_init_NOX == 0){
+          menu_id = 001;
+        }
+        else
+        {
+          menu_id = 000;
+        }
       }
       else
       {
         dateUpdate();
         saveTimeSetting();
         timeSetMode = SETNOTHING;
+        menu_id = 300;
       }
       break;
 
@@ -973,16 +1142,25 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       break;
     }
 
-    if (timeSetMode == SETNOTHING)
-    {
+    if(F_init_NOX == 0){
       lcd.setCursor(0, 0);
-      lcd.print("3.");
+      lcd.print("  ");
     }
     else
     {
-      lcd.setCursor(0, 0);
-      lcd.print(">  ");
-    }
+      if (timeSetMode == SETNOTHING)
+      {
+        lcd.setCursor(0, 0);
+        lcd.print("3.");
+      }
+      else
+      {
+        lcd.setCursor(0, 0);
+        lcd.print(">  ");
+      }
+    }  
+
+    
     lcd.setCursor(2, 0);
     lcd.print(MenuItems[2][lang]);
 
@@ -1080,7 +1258,13 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       else
       {
         timeSetMode = SETNOTHING;
-        menu_id = 300;
+        if(F_init_NOX == 0){
+          menu_id = 400;
+        }
+        else
+        {
+          menu_id = 300;
+        }
       }
       break;
 
@@ -1116,7 +1300,13 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       else
       {
         timeSetMode = SETNOTHING;
-        menu_id = 500;
+        if(F_init_NOX == 0){
+          menu_id = 400;
+        }
+        else
+        {
+          menu_id = 500;
+        }
       }
 
       break;
@@ -1125,10 +1315,14 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       if (timeSetMode == SETDAY)
       {
         timeSetMode = SETMONTH;
+        menu_id = 400; //
+
       }
       else if (timeSetMode == SETMONTH)
       {
         timeSetMode = SETYEAR;
+        menu_id = 400; //
+
       }
       else if (timeSetMode == SETYEAR)
       {
@@ -1136,18 +1330,29 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
         timeUpdate();
         saveTimeSetting();
         timeSetMode = SETNOTHING;
+        menu_id = 400; //
+        if(F_init_NOX == 0){
+          menu_id = 900;
+        }
       }
       else if (timeSetMode == SETNOTHING)
       {
         timeSetMode = SETDAY;
+        menu_id = 400; //
+
       }
-      menu_id = 400; //
       break;
 
     case EXIT:
       if (timeSetMode == SETNOTHING)
       {
-        menu_id = 000; // Hauptmenu
+        if(F_init_NOX == 0){
+          menu_id = 300;
+        }
+        else
+        {
+          menu_id = 000; // Hauptmenu
+        }
       }
       else
       {
@@ -1155,6 +1360,7 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
         timeUpdate();
         saveTimeSetting();
         timeSetMode = SETNOTHING;
+        menu_id = 400;
       }
       break;
 
@@ -1184,16 +1390,24 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
       maxDayThisMonth = 30;
     }
 
-    if (timeSetMode == SETNOTHING)
-    {
+    if(F_init_NOX == 0){
       lcd.setCursor(0, 0);
-      lcd.print("4.");
+      lcd.print("  ");
     }
     else
     {
-      lcd.setCursor(0, 0);
-      lcd.print(">  ");
-    }
+      if (timeSetMode == SETNOTHING)
+      {
+        lcd.setCursor(0, 0);
+        lcd.print("4.");
+      }
+      else
+      {
+        lcd.setCursor(0, 0);
+        lcd.print(">  ");
+      }
+    }  
+    
     lcd.setCursor(2, 0);
     lcd.print(MenuItems[3][lang]);
 
@@ -1218,7 +1432,7 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
     }
     else if (timeSetMode == SETYEAR)
     {
-      lcd.setCursor(8, 1);
+      lcd.setCursor(10, 1);
       lcd.noCursor();
       lcd.blink();
     }
@@ -1754,33 +1968,33 @@ void menuFunctions(BTNAction action) // Ihre Menüfunktionen
   {
     switch (action)
     {
-    case LEFT:
-      menu_id = 100;
-      break;
-
-    case RIGHT:
-      menu_id = 100;
-      break;
-
-    case SELECT:
-      menu_id = 100;
-      break;
-
-    case EXIT:
-      menu_id = 100;
-      break;
-
+    
     default:
-      menu_id = 900;
+      menu_id = 000;
       break;
     }
 
-    saveAlarmValues();
+    
+    if(F_init_NOX == 0)
+    {     
+      F_init_NOX = 1;
+      memory.putInt("init_NOX", 1);
+      errorFlag = NO_ERROR;
+      memory.putBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
+
+    }
+    else
+    {
+      saveAlarmValues();
+    }
+    
     // TODO: einmaliges speichern
     lcd.setCursor(0, 0);
     lcd.print(MenuItemsMode[8][lang]);
     lcd.noBlink();
     lcd.noCursor();
+
+    delay(800);
 
     statusabfrage();
   }
@@ -1795,23 +2009,29 @@ void menuUpdate()
   if (digitalRead(SW_SELECT) == HIGH && button_flag == 0)
   {
     // Serial.println("Select pressed");
-    menuFunctions(SELECT);
+    if((millis() - lastPress < LCD_OFF_TIME)){
+      menuFunctions(SELECT);
+    }
     button_flag = 1;
     previousMillis = millis();
     lastPress = millis();
   }
-  if (digitalRead(SW_EXIT) == HIGH && button_flag == 0)
+  else if (digitalRead(SW_EXIT) == HIGH && button_flag == 0)
   {
     // Serial.println("Exit pressed");
-    menuFunctions(EXIT);
+    if((millis() - lastPress < LCD_OFF_TIME)){
+      menuFunctions(EXIT);
+    }
     button_flag = 1;
     previousMillis = millis();
     lastPress = millis();
   }
-  if (digitalRead(SW_BACK) == HIGH && button_flag == 0)
+  else if (digitalRead(SW_BACK) == HIGH && button_flag == 0)
   {
     // Serial.println("Left pressed");
-    menuFunctions(LEFT);
+    if((millis() - lastPress < LCD_OFF_TIME)){
+      menuFunctions(LEFT);
+    }
     button_flag = 1;
     previousMillis = millis();
     lastPress = millis();
@@ -1819,7 +2039,10 @@ void menuUpdate()
   else if (digitalRead(SW_FWD) == HIGH && button_flag == 0)
   {
     // Serial.println("Right pressed");
-    menuFunctions(RIGHT);
+    if((millis() - lastPress < LCD_OFF_TIME)){
+      menuFunctions(RIGHT);
+    }
+    
     button_flag = 1;
     previousMillis = millis();
     lastPress = millis();
@@ -1847,7 +2070,11 @@ void menuUpdate()
     longPressFlag = false;
   }
 
-  // Check if long press is valdi and short debounce time should be taken
+
+
+
+
+  // Check if long press is valid and short debounce time should be taken
   if (longPressFlag && (millis() - longPressStart > BUTTON_LONG_PRESS_TIME))
   {
     if (millis() - previousMillis >= BUTTON_DEBOUNCE_TIME_FAST)
@@ -1951,12 +2178,14 @@ void activateLDR()
       else
       { // Counter noch nicht voll
         esp_sleep_enable_timer_wakeup(S_TO_uS * lux_debounce_time);
+        PREP_FOR_DEEP_SLEEP
       }
     }
     else
     {
       esp_sleep_enable_timer_wakeup(S_TO_uS * t_sens);
       ramCounter = 0;
+      PREP_FOR_DEEP_SLEEP
     }
   }
   else if (LDRFlag == POS_UP)
@@ -1973,13 +2202,20 @@ void activateLDR()
       else
       { // Counter noch nicht voll
         esp_sleep_enable_timer_wakeup(S_TO_uS * lux_debounce_time);
+        PREP_FOR_DEEP_SLEEP
       }
     }
     else
     {
       esp_sleep_enable_timer_wakeup(S_TO_uS * t_sens);
       ramCounter = 0;
+      PREP_FOR_DEEP_SLEEP
     }
+  }
+  else // Kann eigentlich nicht auftreten 
+  {
+    errorFlag = WRONG_LDR_FLAG;
+    statusabfrage();
   }
 }
 
@@ -2289,6 +2525,7 @@ void statusabfrage()
   else if (!up && low)
   { // Klappe hängt fest
     doorPosition = POS_BLOCKED;
+    errorFlag = TIMER_BLOCKED_ELAPSED; // TODO: ErrorHandling
     Serial.println("Klappe ist stuck");
   }
   else if (up && low)
@@ -2303,37 +2540,53 @@ void statusabfrage()
     Serial.println("Klappe fährt");
   }
 
-  switch (doorPosition)
-  {
-  case POS_UP:
-    setNextClosingAlarm();
-    break;
+  memory.putBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
 
-  case POS_DOWN:
-    setNextOpeningAlarm();
-    break;
 
-  case POS_BLOCKED:
-    errorFlag = TIMER_BLOCKED_ELAPSED; // TODO: ErrorHandling
-    break;
-
-  case POS_DRIVING:
-    // Klappe ist irgendwo zwischen oben und unten --> irgendetwas ist passiert seit der letzten Bewegung.
-    // In diesem Fall wird die letzte bekannte position abgefragt und das Gegenteil gemacht.
-    if (lastDoorPosition == POS_DOWN)
-    {
-      setNextOpeningAlarm();
-    }
-    else if (lastDoorPosition == POS_UP)
-    {
-      setNextClosingAlarm(); // TODO: Diskutieren, ob standardmäßiges Schließen genug ist
-    }
-    else
-    {
-      errorFlag = TIMER_BLOCKED_ELAPSED; // TODO: ErrorHandling
-    }
-    break;
+  //////// ERROR HANDLING ///////////
+  if(errorFlag != NO_ERROR){
+    menuActive = 1;  // Wenn ein Fehler vorliegt wird nichts gemacht und das Menü wird aktiv gehalten und der Fehlercode angezeigt
+    menu_id == 002;
   }
+
+  else
+  { // KEIN FEHLER
+    switch (doorPosition)
+    {
+    case POS_UP:
+      setNextClosingAlarm();
+      break;
+
+    case POS_DOWN:
+      setNextOpeningAlarm();
+      break;
+
+    case POS_BLOCKED: // Kann eigentlich nicht sein
+      errorFlag = POS_BLOCKED_CANNOT_BE_SET;
+      memory.putBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
+      setNextClosingAlarm();
+      break;
+
+    case POS_DRIVING:
+      // Klappe ist irgendwo zwischen oben und unten --> irgendetwas ist passiert seit der letzten Bewegung.
+      // In diesem Fall wird die letzte bekannte position abgefragt und das Gegenteil gemacht.
+      if (lastDoorPosition == POS_DOWN)
+      {
+        setNextOpeningAlarm();
+      }
+      else if (lastDoorPosition == POS_UP)
+      {
+        setNextClosingAlarm(); // TODO: Diskutieren, ob standardmäßiges Schließen genug ist
+      }
+      else
+      {
+        setNextClosingAlarm(); // wenn noch keine bewegung stattgefunden hat wird der nächste Schließalarm aufgerufen
+      }
+      break;
+    }
+  }
+
+
 }
 
 void moveMotor(KLAPPENPOSITION pos)
@@ -2369,7 +2622,7 @@ void moveMotor(KLAPPENPOSITION pos)
   }
   else if (!up && low)
   { // Klappe hängt fest
-    doorPosition = POS_BLOCKED;
+    doorPosition = POS_DRIVING; // Damit in der Blocked schleife der Timer gestartet wird
     Serial.println("Func: moveMotor(), Klappe hängt ");
   }
   else if (up && low)
@@ -2385,6 +2638,7 @@ void moveMotor(KLAPPENPOSITION pos)
 
   while (doorPosition != pos)
   {
+    
     pinMode(END_LOW, INPUT_PULLUP);
     pinMode(END_UP, INPUT_PULLUP);
 
@@ -2399,17 +2653,32 @@ void moveMotor(KLAPPENPOSITION pos)
 
     if (!up && !low)
     {
-      Serial.println("Func: moveMotor(), Klappe ist unten, fährt hoch ");
-      doorPosition = POS_DOWN;
-      if (doorDirection != MOVING_UP)
-      {
-        doorDirection = MOVING_UP;
-        moveZero = millis();
+      if(doorDirection == MOVING_DOWN){
+        downwardsTimer = millis();
+        doorDirection = FINISHING_DOWN;
       }
-      digitalWrite(M_FWD, HIGH);
-      digitalWrite(M_BACK, LOW);
-      // Klappe ist unten oder
-      // Klappe ist zu leicht
+
+      else if (doorDirection == FINISHING_DOWN){
+        if(millis() - downwardsTimer > t_down_finish * 1000 )
+        {
+          doorPosition = POS_DOWN;
+        }
+      }
+
+      else
+      {
+        Serial.println("Func: moveMotor(), Klappe ist unten, fährt hoch ");
+        doorPosition = POS_DOWN;
+        if (doorDirection != MOVING_UP)
+        {
+          doorDirection = MOVING_UP;
+          moveZero = millis();
+        }
+        digitalWrite(M_FWD, HIGH);
+        digitalWrite(M_BACK, LOW);
+        // Klappe ist unten oder
+        // Klappe ist zu leicht
+      }
     }
 
     else if (!up && low)
@@ -2438,6 +2707,10 @@ void moveMotor(KLAPPENPOSITION pos)
         doorPosition = POS_BLOCKED;
         blockZero = millis();
       }
+
+      if(doorDirection == FINISHING_DOWN){
+        doorDirection = MOVING_DOWN;
+      }
       // timerBlocked = timerBegin(BLOCKED_TIMER, t_err_open, true); // TODO: Implement Blocked Timer
     }
 
@@ -2445,11 +2718,17 @@ void moveMotor(KLAPPENPOSITION pos)
     {
       Serial.println("Klappe oben, Motor fährt runter...");
       doorPosition = POS_UP;
-      if (doorDirection != MOVING_DOWN)
+      if (doorDirection != MOVING_DOWN && doorDirection != FINISHING_DOWN)
       {
         doorDirection = MOVING_DOWN;
         moveZero = millis();
       }
+
+      if(doorDirection == FINISHING_DOWN){
+        doorDirection = MOVING_DOWN;
+      }
+
+
       digitalWrite(M_FWD, LOW);
       digitalWrite(M_BACK, HIGH);
       // Klappe ist oben
@@ -2459,8 +2738,9 @@ void moveMotor(KLAPPENPOSITION pos)
     { // Klappe fährt grade
       doorPosition = POS_DRIVING;
 
-      if (doorDirection == MOVING_DOWN)
+      if (doorDirection == MOVING_DOWN || doorDirection == FINISHING_DOWN)
       {
+        doorDirection = MOVING_DOWN;
         Serial.println("Klappe fährt grade herunter, Motor fährt weiter...");
       }
       else if (doorDirection == MOVING_UP)
@@ -2521,6 +2801,11 @@ void moveMotor(KLAPPENPOSITION pos)
 
     //=====================END WHILE================
   }
+
+  if(doorPosition != POS_BLOCKED){
+    errorFlag = NO_ERROR;
+  }
+
   digitalWrite(M_FWD, LOW);
   digitalWrite(M_BACK, LOW);
   doorDirection = STANDING;
@@ -2664,7 +2949,15 @@ void readValuesFromFlash()
     memory.getBytes(keyLastMovePosition, &lastDoorPosition, sizeof(KLAPPENPOSITION));
   }
 
+  
+
   F_init_NOX = memory.getInt("init_NOX", 0);
+  if(F_init_NOX == 0){
+    errorFlag = NO_ERROR;
+  }
+  else{
+    memory.getBytes(keyErrorFlag, &errorFlag, sizeof(ERROR_CODE));
+  }
 
   F_init_alarm = memory.getInt("init_alarm", 0);
   if (F_init_alarm == 0)
@@ -2729,6 +3022,7 @@ void alarmWakeupHandling()
 
   default:
     Serial.println("Func: alarmWakeupHandling(): ERROR: wrong alarmFlag");
+    errorFlag = WRONG_ALARM_FLAG;
     digitalWrite(LED, HIGH);
     statusabfrage();
     break;
@@ -2767,7 +3061,7 @@ void timerWakeupHandling()
 {
   // TODO: timer wakeup handling implementieren
   activateLDR();
-  PREP_FOR_DEEP_SLEEP
+  // PREP_FOR_DEEP_SLEEP
 }
 
 // TODO: implement alarm recognition while menu is active (CPU awake)
@@ -2898,7 +3192,7 @@ void setup()
 
   wakeupHandling();
 
-  // ========= Der folgende Teil wird nur erreicht, wenn die Wakeup-Quelle kein Knopf war =========
+  // ========= Der folgende Teil wird nur erreicht, wenn die Wakeup-Quelle kein Knopf war oder ein Error vorliegt =========
   LCD_ON;
   digitalWrite(LDR_EN, HIGH);
   delay(50);
@@ -2922,6 +3216,7 @@ void setup()
 
 void loop()
 {
+
   if (digitalRead(CLK_INT) == 1)
   { // Alarm ist während der Menülaufzeit gekommen //TODO: Was wenn alarm auf 00:01 gestellt wurde? --> verhindern oder Fehlerreaktion (immer auf 00:02 aufrunden zb)
     lcd.clear();
@@ -2943,14 +3238,17 @@ void loop()
 
     if (millis() - lastPress >= NOX_SLEEP_TIME)
     {
-      menuActive = 0;
-      statusabfrage();
+      if(errorFlag == NO_ERROR)
+      {
+        menuActive = 0;
+        statusabfrage();
+      }
     }
 
     // Check ob menü refresh nötig ist
     if (((millis() - blinkZero) / 500) % 2 == 0)
     {
-      if (blink == 1 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810) || (menu_id == 001)))
+      if (blink == 1 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810) || (menu_id == 001) || (menu_id == 002)))
       {
         menuRefreshFlag = true;
         blinkCount += 1;
@@ -2963,13 +3261,16 @@ void loop()
     }
     else
     {
-      if (blink == 0 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810) || (menu_id == 001)))
+      if (blink == 0 && ((menu_id == 300 && timeSetMode == SETNOTHING) || (menu_id == 000) || (menu_id == 810) || (menu_id == 001) || (menu_id == 002)))
       {
         menuRefreshFlag = true;
       }
       blink = 1;
     }
 
+    if(errorFlag != NO_ERROR){
+      menu_id = 002;
+    }
     menuUpdate();
     // delay(50);
   }
