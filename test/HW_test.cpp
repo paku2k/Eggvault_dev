@@ -59,7 +59,9 @@ void loop(){
   Serial.print("END_UP : ");
   Serial.println(digitalRead(END_UP));
   Serial.print("END_LOW: ");
-  Serial.println(digitalRead(END_LOW));
+  pinMode(END_LOW, INPUT);
+  int end_low = digitalRead(END_LOW);
+  Serial.println(end_low);
 
   if(!digitalRead(SW_SELECT)){
       digitalWrite(LDR_EN, LOW);

@@ -28,6 +28,8 @@ uint8_t ramCounter;
 uint8_t Minute, Hour, Date, Month, Year, DoW, Second;
 time_t t_now;
 
+byte control_reg;
+
 
 void printBin(byte aByte) {
   for (int8_t aBit = 7; aBit >= 0; aBit--)
@@ -127,6 +129,9 @@ void timeUpdate()
   // Serial.println("Getting current time");
   rtc.updateTime();
 
+  control_reg = rtc.readRegister(RV8803_CONTROL);
+
+
   tmels.Day = rtc.getDate();
   Date = tmels.Day;
   tmels.Month = rtc.getMonth();
@@ -134,7 +139,7 @@ void timeUpdate()
   tmels.Year = rtc.getYear() - 1970;
   Year = tmels.Year + 1970;
   tmels.Wday = rtc.getWeekday();
-  Serial.println();
+  //Serial.println();
   Serial.print("Weekday while reading: ");
   Serial.println(tmels.Wday);
   DoW = tmels.Wday;
@@ -145,6 +150,8 @@ void timeUpdate()
   Minute = tmels.Minute;
   tmels.Second = rtc.getSeconds();
   Second = tmels.Second;
+  Serial.println(control_reg, BIN);
+
 
   // TODO: check DoW conversion / automatic setting
   // TODO: implement init time setting (wenn init = 0)
@@ -197,7 +204,7 @@ void loop()
   Serial.print("year t_mels:  ");
   Serial.println(year(t_now));
 
-  delay(500);
+  delay(5000);
 //   if(ramCounter%3 == 0){
 //     if(alarmFlag+1 > 3){
 //       alarmFlag = (KLAPPENPOSITION) 0;

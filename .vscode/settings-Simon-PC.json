@@ -13,9 +13,7 @@
         "iosfwd": "cpp",
         "new": "cpp",
         "ostream": "cpp",
-        "streambuf": "cpp",
-        "string": "cpp",
-        "vector": "cpp"
+        "streambuf": "cpp"
     },
     "todo-tree.tree.showBadges": false,
     "cmake.configureOnOpen": true

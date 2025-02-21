@@ -50,7 +50,7 @@ uint8_t ramCounter;
 byte blinkFactor = 8;
 
 int dammerungsverzogerung = 600; // TODO: Dämmerungsverzögerung implementieren
-byte lux_debounce_number = 3;    // wie oft muss die Lichtschwelle erreicht sein, bis die Klappe sich bewegt (<=16)
+byte lux_debounce_number = 3;    // < 16 !!!! wie oft muss die Lichtschwelle erreicht sein, bis die Klappe sich bewegt DARF NICHT GRÖßER ALS 16 SEIN
 int lux_debounce_time = 20;      // Zeit in sekunden zwischen zwei positiven Lichtprüfungen
 int t_delta_min = 600;           // Zeit in Sekunden die zwischen zwei betätigungen per Licht vergangen sein müssen
 int t_sens = 120;                // Zeit in Sekunden, die zwischen zwei Sensorprüfungen vergeht

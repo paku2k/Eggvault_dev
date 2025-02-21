@@ -41,6 +41,9 @@ void makeLocalTime();
                         gpio_set_pull_mode((gpio_num_t)i, GPIO_FLOATING);\
          }\
        }\
+       if(digitalRead(LED) == 1){\
+        gpio_hold_en((gpio_num_t)LED);\
+       }\
        writeValuesToFlash();\
        LCD_OFF;\
        delay(200);\
@@ -98,7 +101,7 @@ void makeLocalTime();
 #define MINLUX 0
 #define MAXLUX 9
 
-enum ERROR_CODE {NO_ERROR, TIMER_BLOCKED_ELAPSED, TIMER_OPEN_ELAPSED, TIMER_CLOSE_ELAPSED, WRONG_LDR_FLAG,WRONG_ALARM_FLAG,POS_BLOCKED_CANNOT_BE_SET,UNDEFINED};
+enum ERROR_CODE {NO_ERROR, TIMER_BLOCKED_ELAPSED, TIMER_OPEN_ELAPSED, TIMER_CLOSE_ELAPSED, WRONG_LDR_FLAG,WRONG_ALARM_FLAG,POS_BLOCKED_CANNOT_BE_SET,WRONG_ALARM_MODE,UNDEFINED};
 
 
 enum KLAPPENPOSITION {POS_UP, POS_DOWN, POS_DRIVING, POS_BLOCKED};
