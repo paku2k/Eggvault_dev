@@ -30,14 +30,14 @@ void setup(){
   LCD_ON
   lcd.begin(16,2);
   lcd.print("Hello World");
-  
+  Serial.println("Los");
   ldr.attach(LDR_VAL);
   vbatt.attach(V_BATT);
 
 }
 
 void loop(){
-  digitalWrite(LDR_EN, HIGH);
+  // digitalWrite(LDR_EN, HIGH);
   Serial.print("LDR: ");
   Serial.println(ldr.readVoltage());
   Serial.print("VBATT: ");
@@ -45,13 +45,13 @@ void loop(){
   Serial.println();
   Serial.println("===Switches===");
   Serial.print("SW_FWD : ");
-  Serial.println(analogRead(SW_FWD));
+  Serial.println(digitalRead(SW_FWD));
   Serial.print("SW_BACK: ");
-  Serial.println(analogRead(SW_BACK));
+  Serial.println(digitalRead(SW_BACK));
   Serial.print("SW_EXIT: ");
-  Serial.println(analogRead(SW_EXIT));
+  Serial.println(digitalRead(SW_EXIT));
   Serial.print("SW_SELE: ");
-  Serial.println(analogRead(SW_SELECT));
+  Serial.println(digitalRead(SW_SELECT));
   Serial.println();
   Serial.println("===Endstops===");
   //pinMode(END_UP, INPUT_PULLUP);
@@ -59,14 +59,20 @@ void loop(){
   Serial.print("END_UP : ");
   Serial.println(digitalRead(END_UP));
   Serial.print("END_LOW: ");
-  Serial.println(digitalRead(END_LOW));
+  pinMode(END_LOW, INPUT);
+  int end_low = digitalRead(END_LOW);
+  Serial.println(end_low);
 
-  if(digitalRead(SW_SELECT)){
+  if(!digitalRead(SW_SELECT)){
       digitalWrite(LDR_EN, LOW);
+      digitalWrite(LED, LOW);
+      Serial.println("=== LDR OFF ===");
   }
 
   else{
       digitalWrite(LDR_EN, HIGH);
+      digitalWrite(LED, HIGH);
+      Serial.println("=== LDR ON ===");
   }
 
 

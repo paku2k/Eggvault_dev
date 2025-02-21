@@ -1,0 +1,20 @@
+{
+    "files.associations": {
+        "chrono": "cpp",
+        "condition_variable": "cpp",
+        "ctime": "cpp",
+        "mutex": "cpp",
+        "thread": "cpp",
+        "*.tcc": "cpp",
+        "sstream": "cpp",
+        "typeinfo": "cpp",
+        "exception": "cpp",
+        "fstream": "cpp",
+        "iosfwd": "cpp",
+        "new": "cpp",
+        "ostream": "cpp",
+        "streambuf": "cpp"
+    },
+    "todo-tree.tree.showBadges": false,
+    "cmake.configureOnOpen": true
+}
